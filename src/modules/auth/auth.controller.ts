@@ -14,10 +14,10 @@ export class AuthController {
   @UseGuards(ThrottlerGuard)
   @HttpCode(HttpStatus.OK)
   @Header('Cache-Control', 'no-store')
-  @ApiOperation({ summary: 'ورود با شماره موبایل و رمز عبور' })
+  @ApiOperation({ summary: 'ورود با نام کاربری یا شماره موبایل و رمز عبور' })
   @ApiOkResponse({ type: LoginResponseDto })
   @ApiBadRequestResponse({ description: 'ساختار ورودی نامعتبر است' })
-  @ApiUnauthorizedResponse({ description: 'شماره موبایل یا رمز عبور اشتباه است' })
+  @ApiUnauthorizedResponse({ description: 'شناسه ورود یا رمز عبور اشتباه است' })
   @ApiResponse({ status: 429, description: 'تعداد تلاش‌ها بیش از حد مجاز است' })
   login(@Body() input: LoginDto): Promise<LoginResponseDto> {
     return this.auth.login(input);

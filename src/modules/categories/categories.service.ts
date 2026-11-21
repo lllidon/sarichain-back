@@ -20,7 +20,7 @@ export class CategoriesService {
     return this.categories.create({ ...input, parentId, level });
   }
 
-  async exists(id: Types.ObjectId): Promise<boolean> {
-    return Boolean(await this.categories.exists({ _id: id }));
+  async acceptsProducts(id: Types.ObjectId): Promise<boolean> {
+    return Boolean(await this.categories.exists({ _id: id, level: { $in: [2, 3] } }));
   }
 }

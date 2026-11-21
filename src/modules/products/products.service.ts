@@ -24,10 +24,11 @@ export class ProductsService {
     if (!input.basePrice) throw new BadRequestException('Master products require a base price.');
 
     const [categoryExists, brandExists] = await Promise.all([
-      this.categories.exists(input.categoryId),
+      this.categories.acceptsProducts(input.categoryId),
       input.brandId ? this.brands.exists(input.brandId) : true,
     ]);
-    if (!categoryExists || !brandExists) throw new BadRequestException('Category or brand does not exist.');
+    if (!categoryExists) throw new BadRequestException('Select an existing second- or third-level category.');
+    if (!brandExists) throw new BadRequestException('Brand does not exist.');
 
     await this.products.init();
     return this.products.create({ ...input, kind: 'master', masterId: null });
@@ -36,6 +37,9 @@ export class ProductsService {
   async createVariant(input: ProductInput & { masterId: Types.ObjectId; priceAdjustment?: number; options?: ProductOption[] }) {
     const master = await this.products.findOne({ _id: input.masterId, kind: 'master' }).lean().exec();
     if (!master?.basePrice) throw new BadRequestException('A variant must reference a master product with a base price.');
+    if (!await this.categories.acceptsProducts(master.categoryId)) {
+      throw new BadRequestException('The master must belong to a second- or third-level category.');
+    }
 
     const priceAdjustment = input.priceAdjustment ?? 0;
     const calculated = master.basePrice.amount + priceAdjustment;

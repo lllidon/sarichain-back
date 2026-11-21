@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './modules/auth/auth.module';
-import { ProductsModule } from './modules/products/products.module';
+import { CatalogModule } from './modules/catalog/catalog.module';
 import { validateEnvironment } from './config/environment';
 
 @Module({
@@ -19,7 +19,7 @@ import { validateEnvironment } from './config/environment';
       }),
     }),
     AuthModule,
-    ProductsModule,
+    CatalogModule,
   ],
 })
 export class AppModule {}

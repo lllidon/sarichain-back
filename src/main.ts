@@ -17,6 +17,7 @@ async function bootstrap() {
     .setTitle('Sarichain API')
     .setDescription('ورود با شماره موبایل و رمز عبور')
     .setVersion('0.1.0')
+    .addBearerAuth()
     .build();
 
   SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig));

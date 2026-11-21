@@ -51,7 +51,7 @@ src/
 
 ## مدل کاتالوگ
 
-ماژول‌های `categories`، `brands` و `products` به‌ترتیب مجموعه‌های هم‌نام را در دیتابیس `sarichain` تعریف می‌کنند. ساخت رکورد از طریق سرویس‌های داخلی NestJS انجام می‌شود. API فعلی در Swagger همان عملیات ورود است.
+ماژول‌های `categories`، `brands` و `products` به‌ترتیب مجموعه‌های هم‌نام را در دیتابیس `sarichain` تعریف می‌کنند. ساخت رکورد از طریق سرویس‌های داخلی NestJS انجام می‌شود. مسیر خواندن `GET /catalog/:collection` برای پنل در Swagger مستند شده است. مقدار `collection` یکی از `products`، `categories` و `brands` است. توکن ورود را با هدر `Authorization: Bearer <token>` بفرستید. پارامترهای `search`، `page` و `limit` اختیاری‌اند.
 
 هر سه مدل `name`، `slug` یکتا در مجموعه، `imageUrl`، `thumbnailUrl`، `shortDescription`، `description`، `isActive` و زمان ایجاد و ویرایش دارند. `slug` بخش خوانای نشانی صفحه است. برند سلسله‌مراتب ندارد.
 

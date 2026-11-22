@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Header, Param, ParseEnumPip
 import { ApiBearerAuth, ApiParam, ApiTags } from '@nestjs/swagger';
 import { isObjectIdOrHexString } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
-import { AdminGuard } from '../auth/admin.guard';
+import type { AccessRequest } from '../auth/access';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { MemberDto } from './member.dto';
 import { MemberGroup } from './member-types';
@@ -10,7 +10,7 @@ import { MembersService } from './members.service';
 
 @ApiTags('members')
 @ApiBearerAuth()
-@UseGuards(AccessTokenGuard, AdminGuard)
+@UseGuards(AccessTokenGuard)
 @Controller('members')
 export class MembersController {
   constructor(private readonly members: MembersService) {}
@@ -18,23 +18,23 @@ export class MembersController {
   @Get(':group')
   @Header('Cache-Control', 'no-store')
   @ApiParam({ name: 'group', enum: MemberGroup })
-  list(@Param('group', new ParseEnumPipe(MemberGroup)) group: MemberGroup, @Query() query: CatalogQueryDto) {
-    return this.members.list(group, query);
+  list(@Param('group', new ParseEnumPipe(MemberGroup)) group: MemberGroup, @Query() query: CatalogQueryDto, @Req() request: AccessRequest) {
+    return this.members.list(group, query, request.access);
   }
 
   @Post(':group')
   @Header('Cache-Control', 'no-store')
   @ApiParam({ name: 'group', enum: MemberGroup })
-  create(@Param('group', new ParseEnumPipe(MemberGroup)) group: MemberGroup, @Body() input: MemberDto) {
-    return this.members.save(group, input);
+  create(@Param('group', new ParseEnumPipe(MemberGroup)) group: MemberGroup, @Body() input: MemberDto, @Req() request: AccessRequest) {
+    return this.members.save(group, input, undefined, request.userId, false, request.access);
   }
 
   @Patch(':group/:id')
   @Header('Cache-Control', 'no-store')
   @ApiParam({ name: 'group', enum: MemberGroup })
   update(@Param('group', new ParseEnumPipe(MemberGroup)) group: MemberGroup, @Param('id') id: string,
-    @Body() input: MemberDto, @Req() request: { userId: string }) {
+    @Body() input: MemberDto, @Req() request: AccessRequest) {
     if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه عضو معتبر نیست.');
-    return this.members.save(group, input, id, request.userId);
+    return this.members.save(group, input, id, request.userId, false, request.access);
   }
 }

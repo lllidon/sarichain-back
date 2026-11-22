@@ -1,9 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsBoolean, IsEmail, IsOptional, IsString, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsMongoId, IsOptional, IsString, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
 import { mobileNumberPattern, normalizePhone } from '../auth/phone';
 
 export class MemberDto {
+  @ApiPropertyOptional() @IsOptional() @IsMongoId() branchId?: string;
+  @ApiPropertyOptional() @IsOptional() @IsMongoId() profileId?: string;
+  @ApiPropertyOptional({ enum: ['admin', 'client'] }) @IsOptional() @IsIn(['admin', 'client']) role?: 'admin' | 'client';
   @ApiPropertyOptional() @ValidateIf((_, value) => value !== undefined) @IsString() @Length(1, 160) fullName?: string;
   @ApiPropertyOptional({ example: '09123456789' })
   @ValidateIf((_, value) => value !== undefined)

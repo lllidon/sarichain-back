@@ -1,4 +1,6 @@
-import { Body, Controller, Header, HttpCode, HttpStatus, Post, UseGuards } from '@nestjs/common';
+import { AccessTokenGuard } from './access-token.guard';
+import { AllowClient, type AccessRequest } from './access';
+import { Body, Controller, Get, Header, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBadRequestResponse, ApiOkResponse, ApiOperation, ApiResponse, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
@@ -9,6 +11,12 @@ import { LoginResponseDto } from './dto/login-response.dto';
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
+
+  @Get('me')
+  @AllowClient()
+  @UseGuards(AccessTokenGuard)
+  @Header('Cache-Control', 'no-store')
+  me(@Req() { access }: AccessRequest) { return access; }
 
   @Post('login')
   @UseGuards(ThrottlerGuard)

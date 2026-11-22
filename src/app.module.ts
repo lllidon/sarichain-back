@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './modules/auth/auth.module';
 import { DirectoryModule } from './modules/directory/directory.module';
+import { OrganizationModule } from './modules/organization/organization.module';
 import { MembersModule } from './modules/members/members.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { validateEnvironment } from './config/environment';
@@ -22,6 +23,7 @@ import { validateEnvironment } from './config/environment';
     }),
     AuthModule,
     CatalogModule,
+    OrganizationModule,
     MembersModule,
     DirectoryModule,
   ],

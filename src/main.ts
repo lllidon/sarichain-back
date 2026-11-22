@@ -6,6 +6,7 @@ import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { AuthService } from './modules/auth/auth.service';
+import { MembersService } from './modules/members/members.service';
 import { CatalogDemoService } from './modules/catalog/demo/catalog-demo.service';
 
 async function bootstrap() {
@@ -27,7 +28,12 @@ async function bootstrap() {
 
   SwaggerModule.setup('docs', app, () => SwaggerModule.createDocument(app, swaggerConfig));
   const config = app.get(ConfigService);
-  await app.get(AuthService).initializeAdmin(config.get<string>('BOOTSTRAP_ADMIN_PASSWORD'));
+  const auth = app.get(AuthService);
+  await auth.migrateInitialAdmin();
+  await auth.initializeAdmin(config.get<string>('BOOTSTRAP_ADMIN_PASSWORD'));
+  if (config.get<string>('SEED_ACCESS_DEMO') === 'true') {
+    await app.get(MembersService).seedOrganization(config.getOrThrow<string>('SEED_ACCESS_DEMO_PASSWORD'));
+  }
   if (config.get<string>('SEED_CATALOG_DEMO') === 'true') {
     await app.get(CatalogDemoService).seed();
   }

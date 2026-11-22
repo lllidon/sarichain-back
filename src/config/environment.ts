@@ -10,6 +10,12 @@ export function validateEnvironment(env: Record<string, unknown>) {
     throw new Error('BOOTSTRAP_ADMIN_PASSWORD must contain 8 to 128 characters.');
   }
 
+  const demoPassword = env.SEED_ACCESS_DEMO_PASSWORD;
+  if (env.SEED_ACCESS_DEMO === 'true' &&
+      (typeof demoPassword !== 'string' || demoPassword.length < 12 || demoPassword.length > 128)) {
+    throw new Error('Set SEED_ACCESS_DEMO_PASSWORD to a password of 12 to 128 characters.');
+  }
+
   const uri = env.MONGODB_URI ?? 'mongodb://127.0.0.1:27017';
   if (typeof uri !== 'string' || !/^mongodb(?:\+srv)?:\/\//.test(uri)) {
     throw new Error('MONGODB_URI must use the mongodb:// or mongodb+srv:// scheme.');

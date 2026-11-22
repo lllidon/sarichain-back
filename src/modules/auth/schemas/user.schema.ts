@@ -1,3 +1,5 @@
+import { Schema as MongoSchema, Types } from 'mongoose';
+import type { AccessRole } from '../access';
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { MemberProfile } from '../../members/member-profile';
 import { MemberGroup, memberTypes } from '../../members/member-types';
@@ -14,8 +16,11 @@ export class User extends MemberProfile {
   @Prop({ unique: true, sparse: true, trim: true, lowercase: true, match: /^[a-z][a-z0-9._-]{2,31}$/ })
   username?: string;
 
-  @Prop({ type: String, enum: ['admin'] })
-  role?: 'admin';
+  @Prop({ type: String, enum: ['management', 'admin', 'client'] })
+  role?: AccessRole;
+
+  @Prop({ type: MongoSchema.Types.ObjectId, ref: 'Profile' })
+  profileId?: Types.ObjectId;
 
   @Prop({ required: true, select: false })
   passwordHash!: string;

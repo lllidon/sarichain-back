@@ -17,6 +17,10 @@ export class AuthService {
     private readonly jwt: JwtService,
   ) {}
 
+  async migrateInitialAdmin(): Promise<void> {
+    await this.users.updateOne({ username: initialAdminUsername, role: 'admin', branchId: null }, { $set: { role: 'management' } });
+  }
+
   async initializeAdmin(password?: string): Promise<void> {
     if (!password || await this.users.exists({})) return;
     await this.users.init();
@@ -25,7 +29,7 @@ export class AuthService {
     // Check again after hashing. Parallel instances share the same bootstrap identity.
     if (await this.users.exists({})) return;
     try {
-      await this.users.create({ username: initialAdminUsername, role: 'admin', fullName: 'مدیر اصلی', type: 'management', passwordHash });
+      await this.users.create({ username: initialAdminUsername, role: 'management', fullName: 'مدیر اصلی', type: 'management', passwordHash });
       Logger.log('Initial admin account created.', AuthService.name);
     } catch (error) {
       const duplicate = typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;

@@ -1,3 +1,4 @@
+import { Schema as MongoSchema, Types } from 'mongoose';
 import { Prop } from '@nestjs/mongoose';
 
 export abstract class MemberProfile {
@@ -8,5 +9,6 @@ export abstract class MemberProfile {
   @Prop({ trim: true, maxlength: 100 }) city?: string;
   @Prop({ trim: true, maxlength: 500 }) address?: string;
   @Prop({ trim: true, maxlength: 1000 }) notes?: string;
+  @Prop({ type: MongoSchema.Types.ObjectId, ref: 'Branch', index: true }) branchId?: Types.ObjectId;
   @Prop({ default: true }) isActive!: boolean;
 }

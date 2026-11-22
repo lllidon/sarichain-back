@@ -4,6 +4,8 @@ import { IsBoolean, IsEmail, IsIn, IsMongoId, IsOptional, IsString, Length, Matc
 import { mobileNumberPattern, normalizePhone } from '../auth/phone';
 
 export class MemberDto {
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) provinceCode?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) cityCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() branchId?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() profileId?: string;
   @ApiPropertyOptional({ enum: ['admin', 'client'] }) @IsOptional() @IsIn(['admin', 'client']) role?: 'admin' | 'client';

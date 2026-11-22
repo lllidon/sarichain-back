@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { InjectModel } from '@nestjs/mongoose';
 import { Error as MongoError, Model, Types } from 'mongoose';
 import type { AccessContext } from '../auth/access';
+import { LocationsService } from '../locations/locations.service';
 import { Branch, Profile } from '../organization/organization.schemas';
 import { hashPassword } from '../auth/password';
 import { normalizePhone } from '../auth/phone';
@@ -26,6 +27,7 @@ export class MembersService {
     @InjectModel(MemberPhone.name) private readonly phones: Model<MemberPhone>,
     @InjectModel(Branch.name) private readonly branches: Model<Branch>,
     @InjectModel(Profile.name) private readonly profiles: Model<Profile>,
+    private readonly locations: LocationsService,
   ) {
     this.models = {
       [MemberGroup.Users]: users as Model<MemberRecord>,
@@ -185,6 +187,7 @@ export class MembersService {
     if (group === MemberGroup.Users && !id && !password) throw new BadRequestException('رمز عبور کاربر الزامی است.');
 
     const data: Record<string, unknown> = Object.fromEntries(Object.entries(profile).filter(([, value]) => value !== undefined));
+    Object.assign(data, await this.locations.memberPlacement(profile, existing));
     if (branchId) data.branchId = new Types.ObjectId(branchId);
     if (userProfile) data.profileId = new Types.ObjectId(userProfile);
     if (effectiveRole) data.role = effectiveRole;

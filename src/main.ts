@@ -1,3 +1,4 @@
+import { LocationsService } from './modules/locations/locations.service';
 import { join } from 'node:path';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -37,6 +38,7 @@ async function bootstrap() {
   if (config.get<string>('SEED_CATALOG_DEMO') === 'true') {
     await app.get(CatalogDemoService).seed();
   }
+  await app.get(LocationsService).importMissing();
   await app.listen(config.getOrThrow<number>('PORT'));
 }
 

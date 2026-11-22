@@ -9,7 +9,7 @@ import { Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from './catalog-query.dto';
 
 import { CatalogCollection } from './catalog-collection';
-import { CatalogAdminGuard } from './catalog-admin.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { CatalogWriteDto, TagWriteDto } from './catalog-write.dto';
 import { CatalogWriteService } from './catalog-write.service';
 import { normalizeTagName, Tag } from './tag.schema';
@@ -36,19 +36,19 @@ export class CatalogController {
   }
 
   @Post('tags')
-  @UseGuards(CatalogAdminGuard)
+  @UseGuards(AdminGuard)
   createTag(@Body() input: TagWriteDto) {
     return this.writes.createTag(input.name);
   }
 
   @Post(':collection')
-  @UseGuards(CatalogAdminGuard)
+  @UseGuards(AdminGuard)
   create(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection, @Body() input: CatalogWriteDto) {
     return this.writes.save(collection, input);
   }
 
   @Patch(':collection/:id')
-  @UseGuards(CatalogAdminGuard)
+  @UseGuards(AdminGuard)
   update(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection,
     @Param('id') id: string, @Body() input: CatalogWriteDto) {
     if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه رکورد معتبر نیست.');
@@ -56,7 +56,7 @@ export class CatalogController {
   }
 
   @Delete(':collection/:id')
-  @UseGuards(CatalogAdminGuard)
+  @UseGuards(AdminGuard)
   @HttpCode(204)
   remove(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection, @Param('id') id: string) {
     if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه رکورد معتبر نیست.');

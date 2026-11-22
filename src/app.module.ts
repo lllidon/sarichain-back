@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from './modules/auth/auth.module';
+import { MembersModule } from './modules/members/members.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { validateEnvironment } from './config/environment';
 
@@ -20,6 +21,7 @@ import { validateEnvironment } from './config/environment';
     }),
     AuthModule,
     CatalogModule,
+    MembersModule,
   ],
 })
 export class AppModule {}

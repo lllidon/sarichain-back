@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import { CatalogAdminGuard } from './catalog-admin.guard';
+import { AdminGuard } from '../auth/admin.guard';
 import { CatalogWriteService } from './catalog-write.service';
 import { Tag, TagSchema } from './tag.schema';
 import { AuthModule } from '../auth/auth.module';
@@ -14,6 +14,6 @@ import { CatalogController } from './catalog.controller';
 @Module({
   imports: [AuthModule, BrandsModule, CategoriesModule, ProductsModule, MongooseModule.forFeature([{ name: Tag.name, schema: TagSchema }])],
   controllers: [CatalogController],
-  providers: [AccessTokenGuard, CatalogAdminGuard, CatalogDemoService, CatalogWriteService],
+  providers: [AccessTokenGuard, AdminGuard, CatalogDemoService, CatalogWriteService],
 })
 export class CatalogModule {}

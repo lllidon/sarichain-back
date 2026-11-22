@@ -1,9 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsEmail, IsIn, IsMongoId, IsOptional, IsString, Length, Matches, MaxLength, ValidateIf } from 'class-validator';
+import { reviewTargets, type ReviewTarget } from './member-types';
 import { mobileNumberPattern, normalizePhone } from '../auth/phone';
 
 export class MemberDto {
+  @ApiPropertyOptional({ enum: reviewTargets }) @IsOptional() @IsIn(reviewTargets) reviewTarget?: ReviewTarget;
+  @ApiPropertyOptional({ enum: ['approved', 'rejected'] }) @IsOptional() @IsIn(['approved', 'rejected']) reviewDecision?: 'approved' | 'rejected';
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) provinceCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) cityCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() branchId?: string;

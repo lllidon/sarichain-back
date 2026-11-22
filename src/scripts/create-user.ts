@@ -1,3 +1,4 @@
+import { MarketplaceMigration } from '../modules/members/marketplace-migration.service';
 import { MembersService } from '../modules/members/members.service';
 import { MemberGroup } from '../modules/members/member-types';
 import { NestFactory } from '@nestjs/core';
@@ -13,6 +14,7 @@ async function createUser() {
 
   const app = await NestFactory.createApplicationContext(AppModule, { logger: false, abortOnError: false });
   try {
+    await app.get(MarketplaceMigration).run();
     await app.get(MembersService).save(MemberGroup.Users, { phone, password }, undefined, undefined, true);
     console.log('User created.');
   } finally {

@@ -4,13 +4,17 @@ import { AuthModule } from '../auth/auth.module';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { LocationsModule } from '../locations/locations.module';
 import { OrganizationModule } from '../organization/organization.module';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { MarketplaceAccountController } from './marketplace-account.controller';
+import { MarketplaceAccounts } from './marketplace-account.service';
+import { MarketplaceMigration } from './marketplace-migration.service';
 import { memberModels } from './member.schemas';
 import { MembersController } from './members.controller';
 import { MembersService } from './members.service';
 
 @Module({
-  imports: [AuthModule, OrganizationModule, LocationsModule, MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController],
-  providers: [MembersService, AccessTokenGuard],
+  imports: [AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
+  controllers: [MembersController, MarketplaceAccountController],
+  providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration],
 })
 export class MembersModule {}

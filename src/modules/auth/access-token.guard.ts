@@ -17,8 +17,8 @@ export class AccessTokenGuard implements CanActivate {
 
     let userId: string;
     try {
-      const claims = await this.jwt.verifyAsync<{ sub?: unknown }>(token, { algorithms: ['HS256'] });
-      if (typeof claims.sub !== 'string' || !isObjectIdOrHexString(claims.sub)) throw new Error();
+      const claims = await this.jwt.verifyAsync<{ sub?: unknown; scope?: unknown }>(token, { algorithms: ['HS256'] });
+      if (claims.scope !== undefined || typeof claims.sub !== 'string' || !isObjectIdOrHexString(claims.sub)) throw new Error();
       userId = claims.sub;
     } catch {
       throw new UnauthorizedException();

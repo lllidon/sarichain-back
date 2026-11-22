@@ -13,6 +13,7 @@ import { CatalogController } from './catalog.controller';
 
 @Module({
   imports: [AuthModule, BrandsModule, CategoriesModule, ProductsModule, MongooseModule.forFeature([{ name: Tag.name, schema: TagSchema }])],
+  exports: [MongooseModule],
   controllers: [CatalogController],
   providers: [AccessTokenGuard, AdminGuard, CatalogDemoService, CatalogWriteService],
 })

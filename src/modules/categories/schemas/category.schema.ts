@@ -1,13 +1,13 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Types } from 'mongoose';
+import { Schema as MongooseSchema, Types } from 'mongoose';
 import { CatalogEntry } from '../../catalog-common/catalog-entry';
 
 @Schema({ collection: 'categories', timestamps: true, strict: 'throw' })
 export class Category extends CatalogEntry {
-  @Prop({ type: Types.ObjectId, ref: Category.name, default: null, immutable: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: Category.name, default: null })
   parentId!: Types.ObjectId | null;
 
-  @Prop({ required: true, enum: [1, 2, 3], immutable: true })
+  @Prop({ required: true, enum: [1, 2, 3] })
   level!: number;
 }
 

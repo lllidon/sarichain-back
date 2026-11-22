@@ -72,6 +72,12 @@ export class CatalogDemoService {
   ) {}
 
   async seed() {
+    const database = this.productModel.db.db;
+    if (!database) throw new Error('MongoDB is not connected.');
+    const runs = database.collection<{ _id: string; completedAt: Date }>('catalog_seed_runs');
+    const runId = 'storefront-demo-v1';
+    if (await runs.findOne({ _id: runId })) return;
+
     const brandIds: Types.ObjectId[] = [];
     for (const [key, name, image] of demoBrands) {
       const slug = `demo-${key}`;
@@ -131,5 +137,6 @@ export class CatalogDemoService {
         );
       }
     }
+    await runs.updateOne({ _id: runId }, { $setOnInsert: { completedAt: new Date() } }, { upsert: true });
   }
 }

@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Types } from 'mongoose';
+import { Schema as MongooseSchema, Types } from 'mongoose';
 import { Brand } from '../../brands/schemas/brand.schema';
 import { CatalogEntry } from '../../catalog-common/catalog-entry';
 import { Category } from '../../categories/schemas/category.schema';
@@ -69,13 +69,13 @@ export class Product extends CatalogEntry {
   @Prop({ type: String, required: true, enum: ['master', 'variant'], immutable: true })
   kind!: ProductKind;
 
-  @Prop({ type: Types.ObjectId, ref: Product.name, default: null, immutable: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: Product.name, default: null, immutable: true })
   masterId!: Types.ObjectId | null;
 
-  @Prop({ type: Types.ObjectId, ref: Category.name, required: true })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: Category.name, required: true })
   categoryId!: Types.ObjectId;
 
-  @Prop({ type: Types.ObjectId, ref: Brand.name, default: null })
+  @Prop({ type: MongooseSchema.Types.ObjectId, ref: Brand.name, default: null })
   brandId!: Types.ObjectId | null;
 
   @Prop({ type: SchemaFactory.createForClass(Money) })

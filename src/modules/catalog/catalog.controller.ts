@@ -1,20 +1,20 @@
-import { Controller, Get, Header, Param, ParseEnumPipe, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Header, HttpCode, Param, ParseEnumPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiOkResponse, ApiParam, ApiTags, ApiUnauthorizedResponse } from '@nestjs/swagger';
-import { Model } from 'mongoose';
+import { isObjectIdOrHexString, Model } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { Brand } from '../brands/schemas/brand.schema';
 import { Category } from '../categories/schemas/category.schema';
 import { Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from './catalog-query.dto';
 
-enum CatalogCollection {
-  Products = 'products',
-  Categories = 'categories',
-  Brands = 'brands',
-}
+import { CatalogCollection } from './catalog-collection';
+import { CatalogAdminGuard } from './catalog-admin.guard';
+import { CatalogWriteDto, TagWriteDto } from './catalog-write.dto';
+import { CatalogWriteService } from './catalog-write.service';
+import { normalizeTagName, Tag } from './tag.schema';
 
-const commonFields = 'name slug imageUrl thumbnailUrl shortDescription isActive updatedAt';
+const commonFields = 'name slug imageUrl thumbnailUrl shortDescription description isActive updatedAt tagIds';
 
 @ApiTags('catalog')
 @ApiBearerAuth()
@@ -26,7 +26,42 @@ export class CatalogController {
     @InjectModel(Product.name) private readonly products: Model<Product>,
     @InjectModel(Category.name) private readonly categories: Model<Category>,
     @InjectModel(Brand.name) private readonly brands: Model<Brand>,
+    @InjectModel(Tag.name) private readonly tags: Model<Tag>,
+    private readonly writes: CatalogWriteService,
   ) {}
+
+  @Get('tags')
+  listTags(@Query() query: CatalogQueryDto) {
+    return this.find(this.tags, { ...query, search: query.search && normalizeTagName(query.search) }, 'name', ['key', 'name'], []);
+  }
+
+  @Post('tags')
+  @UseGuards(CatalogAdminGuard)
+  createTag(@Body() input: TagWriteDto) {
+    return this.writes.createTag(input.name);
+  }
+
+  @Post(':collection')
+  @UseGuards(CatalogAdminGuard)
+  create(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection, @Body() input: CatalogWriteDto) {
+    return this.writes.save(collection, input);
+  }
+
+  @Patch(':collection/:id')
+  @UseGuards(CatalogAdminGuard)
+  update(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection,
+    @Param('id') id: string, @Body() input: CatalogWriteDto) {
+    if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه رکورد معتبر نیست.');
+    return this.writes.save(collection, input, id);
+  }
+
+  @Delete(':collection/:id')
+  @UseGuards(CatalogAdminGuard)
+  @HttpCode(204)
+  remove(@Param('collection', new ParseEnumPipe(CatalogCollection)) collection: CatalogCollection, @Param('id') id: string) {
+    if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه رکورد معتبر نیست.');
+    return this.writes.delete(collection, id);
+  }
 
   @Get(':collection')
   @Header('Cache-Control', 'no-store')
@@ -38,12 +73,12 @@ export class CatalogController {
   ) {
     switch (collection) {
       case CatalogCollection.Products:
-        return this.find(this.products, query, commonFields + ' sku itemId kind categoryId brandId masterId basePrice priceAdjustment',
-          ['name', 'slug', 'sku', 'itemId'], ['categoryId', 'brandId', 'masterId']);
+        return this.find(this.products, query, commonFields + ' sku itemId kind categoryId brandId masterId basePrice priceAdjustment physical options',
+          ['name', 'slug', 'sku', 'itemId'], ['categoryId', 'brandId', 'masterId', 'tagIds']);
       case CatalogCollection.Categories:
-        return this.find(this.categories, query, commonFields + ' parentId level', ['name', 'slug'], ['parentId']);
+        return this.find(this.categories, query, commonFields + ' parentId level', ['name', 'slug'], ['parentId', 'tagIds']);
       case CatalogCollection.Brands:
-        return this.find(this.brands, query, commonFields, ['name', 'slug'], []);
+        return this.find(this.brands, query, commonFields, ['name', 'slug'], ['tagIds']);
     }
   }
 

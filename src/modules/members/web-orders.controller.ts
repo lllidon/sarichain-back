@@ -85,14 +85,20 @@ export class WebOrdersController {
     }
 
     const records = await this.products.find({
-      _id: { $in: request.map(item => item.productId) }, kind: 'master', isActive: true,
-    }).select('name price saleUnit saleUnits').lean();
+      _id: { $in: request.map(item => item.productId) }, isActive: true,
+    }).select('name price saleUnit saleUnits kind masterId').lean();
     const products = new Map(records.map(product => [String(product._id), product]));
+    const masterIds = records.flatMap(product => product.kind === 'variant' && product.masterId ? [product.masterId] : []);
+    const parents = masterIds.length ? await this.products.find({ _id: { $in: masterIds }, kind: 'master', isActive: true })
+      .select('saleUnit saleUnits').lean() : [];
+    const masters = new Map(parents.map(product => [String(product._id), product]));
     const quantities = new Map<string, number>();
     const items = request.map(({ productId, quantity, unitId }) => {
       const product = products.get(productId);
-      if (!product) throw new BadRequestException('یکی از محصولات برای سفارش در دسترس نیست.');
-      const unit = unitId ? product.saleUnits?.find(option => option.code === unitId) : undefined;
+      const parent = product?.kind === 'variant' ? masters.get(String(product.masterId)) : undefined;
+      if (!product || (product.kind === 'variant' && !parent)) throw new BadRequestException('یکی از محصولات برای سفارش در دسترس نیست.');
+      const saleUnits = product.saleUnits?.length ? product.saleUnits : parent?.saleUnits;
+      const unit = unitId ? saleUnits?.find(option => option.code === unitId) : undefined;
       if (unitId && !unit) throw new BadRequestException('واحد فروش محصول در دسترس نیست.');
       const unitsPerPack = unit?.quantity ?? 1;
       const baseQuantity = quantity * unitsPerPack;
@@ -103,7 +109,7 @@ export class WebOrdersController {
       quantities.set(productId, accumulated);
       return {
         productId, quantity, baseQuantity, name: product.name, unitId: unitId ?? 'unit',
-        unitName: unit?.name ?? (product.saleUnit || 'واحد'), unitsPerPack,
+        unitName: unit?.name ?? (product.saleUnit || parent?.saleUnit || 'واحد'), unitsPerPack,
         price: product.price ?? { min: 0, max: 0 },
       };
     });

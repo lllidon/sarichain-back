@@ -115,6 +115,9 @@ export class Product extends CatalogEntry {
   @Prop({ type: [SchemaFactory.createForClass(SaleUnit)], default: undefined })
   saleUnits?: SaleUnit[];
 
+  @Prop({ type: [String], default: undefined })
+  gallery?: string[];
+
   @Prop({ type: [SchemaFactory.createForClass(ProductOption)], default: [] })
   options!: ProductOption[];
 

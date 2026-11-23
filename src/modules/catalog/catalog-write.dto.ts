@@ -51,6 +51,11 @@ export class CatalogWriteDto {
   @ApiPropertyOptional({ nullable: true }) @IsOptional() @IsMongoId() parentId?: string | null;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(64) sku?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(100) itemId?: string;
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional() @IsArray() @ArrayMaxSize(8) @ArrayUnique()
+  @IsString({ each: true }) @MaxLength(2048, { each: true })
+  @Matches(/^(?:https?:\/\/[a-z0-9][^\s/]*\/[^\s]*|\/(?!\/)[^\s\\]+)$/i, { each: true })
+  gallery?: string[];
   @ApiPropertyOptional({ enum: ['master', 'variant'] }) @IsOptional() @IsIn(['master', 'variant']) kind?: 'master' | 'variant';
   @ApiPropertyOptional() @IsOptional() @IsMongoId() masterId?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() categoryId?: string;

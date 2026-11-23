@@ -1,14 +1,14 @@
 import { Controller, Get, NotFoundException, Param, Query } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ApiTags } from '@nestjs/swagger';
-import { isObjectIdOrHexString, Model } from 'mongoose';
+import { QueryFilter, isObjectIdOrHexString, Model } from 'mongoose';
 import { Brand } from '../brands/schemas/brand.schema';
 import { Category } from '../categories/schemas/category.schema';
 import { Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from './catalog-query.dto';
 
 const fields = 'name slug imageUrl thumbnailUrl shortDescription description';
-const productFields = fields + ' sku kind categoryId brandId masterId basePrice price saleUnit saleUnits priceAdjustment options';
+const productFields = fields + ' sku kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery priceAdjustment options';
 
 @ApiTags('web')
 @Controller('web')
@@ -20,21 +20,17 @@ export class WebCatalogController {
   ) {}
 
   @Get('products')
-  listProducts(@Query() query: CatalogQueryDto) {
-    return this.listProductsWithPrices(query);
-  }
-
-  private async listProductsWithPrices(query: CatalogQueryDto) {
-    const page = await this.list(this.products, query, productFields, ['name', 'slug', 'sku']);
-    return { ...page, items: await this.withPrices(page.items) };
+  async listProducts(@Query() query: CatalogQueryDto) {
+    const page = await this.list(this.products, query, productFields, ['name', 'slug', 'sku'], { kind: 'master' });
+    return { ...page, items: await this.withVariants(page.items) };
   }
 
   @Get('products/:id')
   async product(@Param('id') id: string) {
     if (!isObjectIdOrHexString(id)) throw new NotFoundException();
-    const product = await this.products.findOne({ _id: id, isActive: true }).select(productFields).lean();
+    const product = await this.products.findOne({ _id: id, kind: 'master', isActive: true }).select(productFields).lean();
     if (!product) throw new NotFoundException();
-    const [view] = await this.withPrices([product]);
+    const [view] = await this.withVariants([product]);
     return view;
   }
 
@@ -48,21 +44,25 @@ export class WebCatalogController {
     return this.list(this.brands, query, fields);
   }
 
-  private async withPrices<T extends Pick<Product, 'kind' | 'basePrice' | 'masterId' | 'priceAdjustment'>>(rows: T[]) {
-    const masterIds = rows.flatMap(row => row.kind === 'variant' && row.masterId ? [row.masterId] : []);
-    if (masterIds.length === 0) return rows;
-    const masters = await this.products.find({ _id: { $in: masterIds }, kind: 'master', isActive: true }).select('basePrice').lean();
-    const prices = new Map(masters.map(master => [String(master._id), master.basePrice]));
-    return rows.map(row => {
-      const base = prices.get(String(row.masterId));
-      if (row.kind !== 'variant' || !base) return row;
-      return { ...row, basePrice: { currency: base.currency, amount: base.amount + (row.priceAdjustment ?? 0) } };
-    });
+  private async withVariants<T extends { _id: unknown }>(products: T[]) {
+    if (!products.length) return [];
+    const variants = await this.products.find({
+      masterId: { $in: products.map(product => String(product._id)) }, kind: 'variant', isActive: true,
+    }).select(productFields).sort({ _id: 1 }).lean();
+    const grouped = new Map<string, typeof variants>();
+    for (const variant of variants) {
+      const key = String(variant.masterId);
+      const group = grouped.get(key) ?? [];
+      group.push(variant);
+      grouped.set(key, group);
+    }
+    return products.map(product => ({ ...product, variants: grouped.get(String(product._id)) ?? [] }));
   }
 
-  private async list<T>(model: Model<T>, { page, limit, search }: CatalogQueryDto, projection: string, searchable = ['name', 'slug']) {
+  private async list<T>(model: Model<T>, { page, limit, search }: CatalogQueryDto, projection: string, searchable = ['name', 'slug'], extra: QueryFilter<T> = {}) {
     const escaped = search?.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const filter = {
+      ...extra,
       isActive: true,
       ...(escaped && { $or: searchable.map(field => ({ [field]: new RegExp(escaped, 'iu') })) }),
     };

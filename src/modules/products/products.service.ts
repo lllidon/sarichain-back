@@ -13,6 +13,7 @@ type ProductInput = CatalogEntryInput & {
   price?: PriceRange | null;
   saleUnit?: string;
   saleUnits?: SaleUnit[];
+  gallery?: string[];
 };
 
 @Injectable()

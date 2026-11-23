@@ -16,7 +16,7 @@ const commonKeys = ['name', 'slug', 'imageUrl', 'thumbnailUrl', 'shortDescriptio
 const specificKeys: Record<CatalogCollection, string[]> = {
   [CatalogCollection.Brands]: [],
   [CatalogCollection.Categories]: ['parentId'],
-  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'saleUnit', 'saleUnits', 'priceAdjustment', 'physical', 'options'],
+  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'saleUnit', 'saleUnits', 'gallery', 'priceAdjustment', 'physical', 'options'],
 };
 
 const idOf = (id: string) => new Types.ObjectId(id);
@@ -142,6 +142,7 @@ export class CatalogWriteService {
       ...(input.price !== undefined && { price: input.price }),
       ...(input.saleUnit !== undefined && { saleUnit: input.saleUnit.trim() }),
       ...(input.saleUnits !== undefined && { saleUnits: input.saleUnits }),
+      ...(input.gallery !== undefined && { gallery: input.gallery }),
     };
     const kind = product?.kind ?? input.kind ?? 'master';
     if (product && input.kind && input.kind !== kind) throw new BadRequestException('نوع محصول پس از ایجاد ثابت است.');

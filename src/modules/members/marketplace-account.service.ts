@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/mongoose';
 import { Error as MongoError, isObjectIdOrHexString, Model } from 'mongoose';
@@ -20,8 +20,9 @@ export class MarketplaceAccounts {
     const demoLogin = process.env.SEED_MARKETPLACE_DEMO === 'true' && process.env.NODE_ENV !== 'production' &&
       ['+989214234099', '+989112244099'].includes(phone);
     if (password.length < 8 && !demoLogin) throw new UnauthorizedException();
-    const member = await this.members.findOne({ phone, isActive: { $ne: false } }).select('+passwordHash').exec();
+    const member = await this.members.findOne({ phone }).select('+passwordHash').exec();
     if (!await verifyPassword(password, member?.passwordHash) || !member) throw new UnauthorizedException();
+    if (member.isActive === false) throw new ForbiddenException('دسترسی ورود برای این حساب مجاز نیست.');
     const accessToken = await this.jwt.signAsync({ sub: member.id, scope: 'marketplace' }, { expiresIn: 3600 });
     return { accessToken, expiresIn: 3600 };
   }

@@ -7,11 +7,13 @@ import { createHash } from 'node:crypto';
 import { Model } from 'mongoose';
 import { PriceRange, Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
+import { producerOffers } from '../catalog/producer-offers';
 import { deliveryMethods, deliveryOptions, deliverySlots, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
 
 class OrderLineDto {
   @ApiProperty() @IsMongoId() productId!: string;
+  @IsOptional() @IsMongoId() offerId?: string;
   @ApiProperty() @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) quantity!: number;
   @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,29}$/) unitId?: string;
 }
@@ -26,7 +28,7 @@ class DeliveryDto {
 class WebOrderDto {
   @ApiProperty() @IsUUID('4') requestId!: string;
   @ApiProperty({ type: [OrderLineDto] })
-  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ArrayUnique((item: OrderLineDto) => item?.productId + ':' + (item?.unitId ?? 'unit'))
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ArrayUnique((item: OrderLineDto) => [item?.productId, item?.unitId ?? 'unit', item?.offerId].join(':'))
   @ValidateNested({ each: true }) @Type(() => OrderLineDto) items!: OrderLineDto[];
   @ApiProperty({ type: DeliveryDto, required: false })
   @IsOptional() @ValidateNested() @Type(() => DeliveryDto) delivery?: DeliveryDto;
@@ -66,12 +68,10 @@ export class WebOrdersController {
   @Post()
   async create(@Headers('authorization') authorization: string | undefined, @Body() input: WebOrderDto) {
     const member = await this.accounts.requireMember(authorization);
-    const request = input.items.map(({ productId, quantity, unitId }) => ({
+    const request = input.items.map(({ productId, quantity, unitId, offerId }) => ({
       productId: productId.toLowerCase(), quantity, ...(unitId && unitId !== 'unit' && { unitId }),
+      ...(offerId && { offerId: offerId.toLowerCase() }),
     }));
-    if (new Set(request.map(item => item.productId + ':' + (item.unitId ?? 'unit'))).size !== request.length) {
-      throw new BadRequestException('واحد تکراری برای محصول ارسال شده است.');
-    }
     const requestedDelivery = input.delivery && { method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot };
     const signature = JSON.stringify(requestedDelivery ? { items: request, delivery: requestedDelivery } : request);
     const id = createHash('sha256').update(member.id + ':' + input.requestId).digest('hex');
@@ -86,15 +86,18 @@ export class WebOrdersController {
 
     const records = await this.products.find({
       _id: { $in: request.map(item => item.productId) }, isActive: true,
-    }).select('name price saleUnit saleUnits maxOrderQuantity kind masterId').lean();
+    }).select('name saleUnit saleUnits maxOrderQuantity kind masterId').lean();
     const products = new Map(records.map(product => [String(product._id), product]));
+    const offers = await producerOffers(this.products.db.db!, [...products.keys()]);
     const masterIds = records.flatMap(product => product.kind === 'variant' && product.masterId ? [product.masterId] : []);
     const parents = masterIds.length ? await this.products.find({ _id: { $in: masterIds }, kind: 'master', isActive: true })
       .select('name saleUnit saleUnits maxOrderQuantity').lean() : [];
     const masters = new Map(parents.map(product => [String(product._id), product]));
     const quantities = new Map<string, number>();
     const familyQuantities = new Map<string, number>();
-    const items = request.map(({ productId, quantity, unitId }) => {
+    const offerQuantities = new Map<string, number>();
+    const lines = new Set<string>();
+    const items = request.map(({ productId, quantity, unitId, offerId }) => {
       const product = products.get(productId);
       const parent = product?.kind === 'variant' ? masters.get(String(product.masterId)) : undefined;
       if (!product || (product.kind === 'variant' && !parent)) throw new BadRequestException('یکی از محصولات برای سفارش در دسترس نیست.');
@@ -103,6 +106,15 @@ export class WebOrdersController {
       if (unitId && !unit) throw new BadRequestException('واحد فروش محصول در دسترس نیست.');
       const unitsPerPack = unit?.quantity ?? 1;
       const baseQuantity = quantity * unitsPerPack;
+      const availableOffers = offers.get(productId) ?? [];
+      const offer = offerId ? availableOffers.find(item => item.id === offerId) : availableOffers.find(item => item.stock >= 1);
+      if (!offer) throw new BadRequestException('عرضهٔ فروشنده در دسترس نیست.');
+      const key = [productId, unitId ?? 'unit', offer.id].join(':');
+      if (lines.has(key)) throw new BadRequestException('واحد تکراری برای محصول ارسال شده است.');
+      lines.add(key);
+      const offeredQuantity = (offerQuantities.get(offer.id) ?? 0) + baseQuantity;
+      if (offeredQuantity > offer.stock) throw new BadRequestException('تعداد سفارش از موجودی اعلامی فروشنده بیشتر است.');
+      offerQuantities.set(offer.id, offeredQuantity);
       const accumulated = (quantities.get(productId) ?? 0) + baseQuantity;
       const familyId = parent ? String(parent._id) : productId;
       const familyTotal = (familyQuantities.get(familyId) ?? 0) + baseQuantity;
@@ -120,8 +132,8 @@ export class WebOrdersController {
       familyQuantities.set(familyId, familyTotal);
       return {
         productId, quantity, baseQuantity, name: product.name, unitId: unitId ?? 'unit',
-        unitName: unit?.name ?? (product.saleUnit || parent?.saleUnit || 'واحد'), unitsPerPack,
-        price: product.price ?? { min: 0, max: 0 },
+        unitName: unit?.name ?? offer.unit, unitsPerPack,
+        price: { min: offer.price, max: offer.price }, offerId: offer.id, sellerName: offer.name,
       };
     });
     const delivery = requestedDelivery ? resolveDelivery(requestedDelivery) : undefined;

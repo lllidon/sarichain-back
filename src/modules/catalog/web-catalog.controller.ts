@@ -6,6 +6,7 @@ import { Brand } from '../brands/schemas/brand.schema';
 import { Category } from '../categories/schemas/category.schema';
 import { Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from './catalog-query.dto';
+import { producerOffers } from './producer-offers';
 
 const fields = 'name slug imageUrl thumbnailUrl shortDescription description';
 const productFields = fields + ' sku kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery maxOrderQuantity priceAdjustment options physical';
@@ -49,14 +50,20 @@ export class WebCatalogController {
     const variants = await this.products.find({
       masterId: { $in: products.map(product => String(product._id)) }, kind: 'variant', isActive: true,
     }).select(productFields).sort({ _id: 1 }).lean();
-    const grouped = new Map<string, typeof variants>();
+    const offers = await producerOffers(this.products.db.db!, [...products, ...variants].map(product => String(product._id)));
+    function withOffers<T extends { _id: unknown }>(product: T) {
+      const available = offers.get(String(product._id)) ?? [];
+      const selected = available.find(offer => offer.stock >= 1) ?? available[0];
+      return { ...product, offers: available, price: selected ? { min: selected.price, max: selected.price } : null };
+    }
+    const grouped = new Map<string, ReturnType<typeof withOffers<(typeof variants)[number]>>[]>();
     for (const variant of variants) {
       const key = String(variant.masterId);
       const group = grouped.get(key) ?? [];
-      group.push(variant);
+      group.push(withOffers(variant));
       grouped.set(key, group);
     }
-    return products.map(product => ({ ...product, variants: grouped.get(String(product._id)) ?? [] }));
+    return products.map(product => ({ ...withOffers(product), variants: grouped.get(String(product._id)) ?? [] }));
   }
 
   private async list<T>(model: Model<T>, { page, limit, search }: CatalogQueryDto, projection: string, searchable = ['name', 'slug'], extra: QueryFilter<T> = {}) {

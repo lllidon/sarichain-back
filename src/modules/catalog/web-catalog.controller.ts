@@ -8,7 +8,7 @@ import { Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from './catalog-query.dto';
 
 const fields = 'name slug imageUrl thumbnailUrl shortDescription description';
-const productFields = fields + ' sku kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery priceAdjustment options';
+const productFields = fields + ' sku kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery priceAdjustment options physical';
 
 @ApiTags('web')
 @Controller('web')

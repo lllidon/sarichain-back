@@ -15,6 +15,12 @@ class PriceRangeDto {
   @IsNumber({ maxDecimalPlaces: 6 }) @Min(0) @Max(1_000_000) max!: number;
 }
 
+class SaleUnitDto {
+  @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,29}$/) code!: string;
+  @IsString() @MaxLength(40) name!: string;
+  @IsInt() @Min(2) @Max(1000) quantity!: number;
+}
+
 class DimensionsDto {
   @IsNumber() @Min(Number.MIN_VALUE) lengthMm!: number;
   @IsNumber() @Min(Number.MIN_VALUE) widthMm!: number;
@@ -52,6 +58,10 @@ export class CatalogWriteDto {
   @ApiPropertyOptional({ type: 'object', properties: { amount: { type: 'integer' }, currency: { type: 'string' } } })
   @IsOptional() @ValidateNested() @Type(() => MoneyDto) basePrice?: MoneyDto;
   @ApiPropertyOptional() @IsOptional() @IsInt() priceAdjustment?: number;
+  @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(40) saleUnit?: string;
+  @ApiPropertyOptional({ type: [SaleUnitDto] })
+  @IsOptional() @IsArray() @ArrayMaxSize(6) @ArrayUnique((item: SaleUnitDto) => item?.code)
+  @ValidateNested({ each: true }) @Type(() => SaleUnitDto) saleUnits?: SaleUnitDto[];
   @ApiPropertyOptional({ type: 'object', nullable: true, properties: { min: { type: 'number' }, max: { type: 'number' } } })
   @IsOptional() @ValidateNested() @Type(() => PriceRangeDto) price?: PriceRangeDto | null;
   @ApiPropertyOptional({ type: 'object', additionalProperties: true })

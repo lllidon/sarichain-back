@@ -16,7 +16,7 @@ const commonKeys = ['name', 'slug', 'imageUrl', 'thumbnailUrl', 'shortDescriptio
 const specificKeys: Record<CatalogCollection, string[]> = {
   [CatalogCollection.Brands]: [],
   [CatalogCollection.Categories]: ['parentId'],
-  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'priceAdjustment', 'physical', 'options'],
+  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'saleUnit', 'saleUnits', 'priceAdjustment', 'physical', 'options'],
 };
 
 const idOf = (id: string) => new Types.ObjectId(id);
@@ -135,13 +135,20 @@ export class CatalogWriteService {
     if (input.price && input.price.min > input.price.max) {
       throw new BadRequestException('حداکثر قیمت باید برابر یا بیشتر از حداقل باشد.');
     }
-    const priceFields = input.price === undefined ? {} : { price: input.price };
+    if (input.saleUnits?.some(unit => unit?.code === 'unit' || !unit?.name?.trim())) {
+      throw new BadRequestException('نام و کد معتبر برای واحد فرعی وارد کنید.');
+    }
+    const commerceFields = {
+      ...(input.price !== undefined && { price: input.price }),
+      ...(input.saleUnit !== undefined && { saleUnit: input.saleUnit.trim() }),
+      ...(input.saleUnits !== undefined && { saleUnits: input.saleUnits }),
+    };
     const kind = product?.kind ?? input.kind ?? 'master';
     if (product && input.kind && input.kind !== kind) throw new BadRequestException('نوع محصول پس از ایجاد ثابت است.');
 
     const fields = {
       ...shared,
-      ...priceFields,
+      ...commerceFields,
       ...(input.sku !== undefined && { sku: input.sku }),
       ...(input.itemId !== undefined && { itemId: input.itemId }),
       ...(input.physical !== undefined && { physical: input.physical }),
@@ -154,7 +161,7 @@ export class CatalogWriteService {
       }
       if (!product) {
         if (!input.masterId || !input.sku) throw new BadRequestException('SKU و محصول اصلی الزامی هستند.');
-        return this.products.createVariant({ ...fields as CatalogEntryInput, ...priceFields, sku: input.sku, itemId: input.itemId,
+        return this.products.createVariant({ ...fields as CatalogEntryInput, ...commerceFields, sku: input.sku, itemId: input.itemId,
           physical: input.physical, options: input.options, masterId: idOf(input.masterId), priceAdjustment: input.priceAdjustment });
       }
       if (input.masterId && input.masterId !== product.masterId?.toString()) {
@@ -174,7 +181,7 @@ export class CatalogWriteService {
     }
     if (!product) {
       if (!input.sku || !input.categoryId) throw new BadRequestException('SKU و دسته‌بندی الزامی هستند.');
-      return this.products.createMaster({ ...fields as CatalogEntryInput, ...priceFields, sku: input.sku, itemId: input.itemId,
+      return this.products.createMaster({ ...fields as CatalogEntryInput, ...commerceFields, sku: input.sku, itemId: input.itemId,
         physical: input.physical, categoryId: idOf(input.categoryId), brandId: input.brandId ? idOf(input.brandId) : undefined, basePrice: input.basePrice ?? { amount: 0, currency: 'IRR' } });
     }
 

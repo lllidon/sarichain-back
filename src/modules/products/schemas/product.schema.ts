@@ -68,6 +68,18 @@ export class ProductOption {
   value!: string;
 }
 
+@Schema({ _id: false, strict: 'throw' })
+export class SaleUnit {
+  @Prop({ required: true, match: /^[a-z0-9][a-z0-9-]{0,29}$/ })
+  code!: string;
+
+  @Prop({ required: true, trim: true, maxlength: 40 })
+  name!: string;
+
+  @Prop({ required: true, min: 2, max: 1000, validate: integer })
+  quantity!: number;
+}
+
 @Schema({ collection: 'products', timestamps: true, strict: 'throw' })
 export class Product extends CatalogEntry {
   @Prop({ required: true, trim: true, uppercase: true, unique: true, maxlength: 64, match: /^[A-Z0-9][A-Z0-9._-]*$/ })
@@ -96,6 +108,12 @@ export class Product extends CatalogEntry {
 
   @Prop({ type: SchemaFactory.createForClass(PriceRange) })
   price?: PriceRange | null;
+
+  @Prop({ trim: true, maxlength: 40 })
+  saleUnit?: string;
+
+  @Prop({ type: [SchemaFactory.createForClass(SaleUnit)], default: undefined })
+  saleUnits?: SaleUnit[];
 
   @Prop({ type: [SchemaFactory.createForClass(ProductOption)], default: [] })
   options!: ProductOption[];

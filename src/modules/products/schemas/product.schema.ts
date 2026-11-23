@@ -17,6 +17,16 @@ const positive = {
 };
 
 @Schema({ _id: false, strict: 'throw' })
+export class PriceRange {
+  @Prop({ required: true, min: 0, max: 1_000_000 })
+  min!: number;
+
+  @Prop({ required: true, min: 0, max: 1_000_000,
+    validate: { validator(this: PriceRange, max: number) { return max >= this.min; }, message: 'Invalid price range.' } })
+  max!: number;
+}
+
+@Schema({ _id: false, strict: 'throw' })
 export class Money {
   @Prop({ required: true, min: 0, validate: integer })
   amount!: number;
@@ -83,6 +93,9 @@ export class Product extends CatalogEntry {
 
   @Prop({ validate: integer })
   priceAdjustment?: number;
+
+  @Prop({ type: SchemaFactory.createForClass(PriceRange) })
+  price?: PriceRange | null;
 
   @Prop({ type: [SchemaFactory.createForClass(ProductOption)], default: [] })
   options!: ProductOption[];

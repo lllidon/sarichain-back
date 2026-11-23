@@ -4,12 +4,13 @@ import { Model, Types } from 'mongoose';
 import { BrandsService } from '../brands/brands.service';
 import { CatalogEntryInput } from '../catalog-common/catalog-entry';
 import { CategoriesService } from '../categories/categories.service';
-import { Money, PhysicalSpecifications, Product, ProductOption } from './schemas/product.schema';
+import { Money, PriceRange, PhysicalSpecifications, Product, ProductOption } from './schemas/product.schema';
 
 type ProductInput = CatalogEntryInput & {
   sku: string;
   itemId?: string;
   physical?: PhysicalSpecifications;
+  price?: PriceRange | null;
 };
 
 @Injectable()

@@ -10,6 +10,11 @@ class MoneyDto {
   currency!: string;
 }
 
+class PriceRangeDto {
+  @IsNumber({ maxDecimalPlaces: 6 }) @Min(0) @Max(1_000_000) min!: number;
+  @IsNumber({ maxDecimalPlaces: 6 }) @Min(0) @Max(1_000_000) max!: number;
+}
+
 class DimensionsDto {
   @IsNumber() @Min(Number.MIN_VALUE) lengthMm!: number;
   @IsNumber() @Min(Number.MIN_VALUE) widthMm!: number;
@@ -47,6 +52,8 @@ export class CatalogWriteDto {
   @ApiPropertyOptional({ type: 'object', properties: { amount: { type: 'integer' }, currency: { type: 'string' } } })
   @IsOptional() @ValidateNested() @Type(() => MoneyDto) basePrice?: MoneyDto;
   @ApiPropertyOptional() @IsOptional() @IsInt() priceAdjustment?: number;
+  @ApiPropertyOptional({ type: 'object', nullable: true, properties: { min: { type: 'number' }, max: { type: 'number' } } })
+  @IsOptional() @ValidateNested() @Type(() => PriceRangeDto) price?: PriceRangeDto | null;
   @ApiPropertyOptional({ type: 'object', additionalProperties: true })
   @IsOptional() @ValidateNested() @Type(() => PhysicalDto) physical?: PhysicalDto;
   @ApiPropertyOptional({ type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, value: { type: 'string' } } } })

@@ -10,7 +10,7 @@ class LocationCityQueryDto extends CatalogQueryDto {
 }
 
 @ApiTags('locations')
-@Controller('locations')
+@Controller(['locations', 'web/locations'])
 export class LocationsController {
   constructor(private readonly locations: LocationsService) {}
 

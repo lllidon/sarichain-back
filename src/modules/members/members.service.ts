@@ -124,6 +124,30 @@ export class MembersService {
     await seeds.updateOne({ _id: seedId }, { $setOnInsert: { _id: seedId } }, { upsert: true });
   }
 
+  async seedMarketplace() {
+    const rows: Array<[MemberGroup, string, string, string, string?]> = [
+      [MemberGroup.Customers, '+989214234099', 'مشتری آزمایشی ساری', 'consumer', '123'],
+      [MemberGroup.Customers, '+989129001001', 'مشتری آزمایشی بابل', 'retailer'],
+      [MemberGroup.Customers, '+989129001002', 'مشتری آزمایشی آمل', 'consumer'],
+      [MemberGroup.Customers, '+989129001003', 'مشتری آزمایشی قائم‌شهر', 'wholesaler'],
+      [MemberGroup.Customers, '+989129001004', 'مشتری آزمایشی بهشهر', 'retailer'],
+      [MemberGroup.Producers, '+989112244099', 'تولیدکننده آزمایشی ساری', 'orchard', '123'],
+      [MemberGroup.Producers, '+989129001005', 'تولیدکننده آزمایشی بابل', 'farm'],
+      [MemberGroup.Producers, '+989129001006', 'تولیدکننده آزمایشی آمل', 'greenhouse'],
+      [MemberGroup.Services, '+989129001007', 'ارائه‌دهنده آزمایشی انبارداری', 'warehouse'],
+      [MemberGroup.Services, '+989129001008', 'ارائه‌دهنده آزمایشی برداشت', 'harvest'],
+      [MemberGroup.Services, '+989129001009', 'ناظر آزمایشی', 'supervisor'],
+    ];
+    const seeds = this.marketplace.db.db!.collection<{ _id: string }>('catalog_seed_runs');
+    const seedId = 'marketplace-demo-v1';
+    if (await seeds.findOne({ _id: seedId })) return;
+    for (const [group, phone, fullName, type, password] of rows) {
+      if (await this.marketplace.exists({ phone })) continue;
+      await this.save(group, { phone, fullName, type, password });
+    }
+    await seeds.updateOne({ _id: seedId }, { $setOnInsert: { _id: seedId } }, { upsert: true });
+  }
+
   private async reserve(phone: string, group: MemberGroup | 'marketplace', memberId: Types.ObjectId) {
     const owner = memberId.toString();
     try {

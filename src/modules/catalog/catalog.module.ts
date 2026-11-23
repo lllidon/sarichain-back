@@ -9,12 +9,13 @@ import { CategoriesModule } from '../categories/categories.module';
 import { ProductsModule } from '../products/products.module';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { CatalogDemoService } from './demo/catalog-demo.service';
+import { WebCatalogController } from './web-catalog.controller';
 import { CatalogController } from './catalog.controller';
 
 @Module({
   imports: [AuthModule, BrandsModule, CategoriesModule, ProductsModule, MongooseModule.forFeature([{ name: Tag.name, schema: TagSchema }])],
   exports: [MongooseModule],
-  controllers: [CatalogController],
+  controllers: [CatalogController, WebCatalogController],
   providers: [AccessTokenGuard, AdminGuard, CatalogDemoService, CatalogWriteService],
 })
 export class CatalogModule {}

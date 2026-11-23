@@ -17,13 +17,16 @@ export class MarketplaceAccounts {
   ) {}
 
   async login({ phone, password }: MarketplaceLoginDto) {
+    const demoLogin = process.env.SEED_MARKETPLACE_DEMO === 'true' && process.env.NODE_ENV !== 'production' &&
+      ['+989214234099', '+989112244099'].includes(phone);
+    if (password.length < 8 && !demoLogin) throw new UnauthorizedException();
     const member = await this.members.findOne({ phone, isActive: { $ne: false } }).select('+passwordHash').exec();
     if (!await verifyPassword(password, member?.passwordHash) || !member) throw new UnauthorizedException();
     const accessToken = await this.jwt.signAsync({ sub: member.id, scope: 'marketplace' }, { expiresIn: 3600 });
     return { accessToken, expiresIn: 3600 };
   }
 
-  private async current(authorization?: string) {
+  async requireMember(authorization?: string) {
     const token = /^Bearer ([^\s]+)$/i.exec(authorization ?? '')?.[1];
     if (!token) throw new UnauthorizedException();
     let id: string;
@@ -61,11 +64,11 @@ export class MarketplaceAccounts {
   }
 
   async profile(authorization?: string) {
-    return this.view(await this.current(authorization));
+    return this.view(await this.requireMember(authorization));
   }
 
   async update(authorization: string | undefined, input: MarketplaceProfileDto) {
-    const member = await this.current(authorization);
+    const member = await this.requireMember(authorization);
     if (Object.values(input).some(value => value === null)) throw new BadRequestException('مقدار خالی نامعتبر است.');
     const previous = member.serviceTypes ?? [];
     const services = input.serviceTypes ?? previous;

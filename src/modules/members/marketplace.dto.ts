@@ -11,7 +11,7 @@ export class MarketplaceLoginDto {
   @Transform(({ value }) => typeof value === 'string' ? normalizePhone(value) : value)
   @IsString() @Matches(mobileNumberPattern) phone!: string;
 
-  @ApiProperty({ writeOnly: true }) @IsString() @Length(8, 128) password!: string;
+  @ApiProperty({ writeOnly: true }) @IsString() @Length(1, 128) password!: string;
 }
 
 class VehicleDto {

@@ -5,7 +5,7 @@ import { MarketplaceAccounts } from './marketplace-account.service';
 import { MarketplaceLoginDto, MarketplaceProfileDto } from './marketplace.dto';
 
 @ApiTags('marketplace')
-@Controller('marketplace')
+@Controller(['marketplace', 'web'])
 export class MarketplaceAccountController {
   constructor(private readonly accounts: MarketplaceAccounts) {}
 

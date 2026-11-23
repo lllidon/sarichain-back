@@ -1,4 +1,6 @@
 import { Module } from '@nestjs/common';
+import { ProductsModule } from '../products/products.module';
+import { WebOrdersController } from './web-orders.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
 import { AccessTokenGuard } from '../auth/access-token.guard';
@@ -13,8 +15,8 @@ import { MembersController } from './members.controller';
 import { MembersService } from './members.service';
 
 @Module({
-  imports: [AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController, MarketplaceAccountController],
+  imports: [ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
+  controllers: [MembersController, MarketplaceAccountController, WebOrdersController],
   providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration],
 })
 export class MembersModule {}

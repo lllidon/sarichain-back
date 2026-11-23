@@ -23,7 +23,7 @@ const ReviewSchema = SchemaFactory.createForClass(RoleReview);
 export class MarketplaceMember extends MemberProfile {
   @Prop({ required: true, unique: true, match: mobileNumberPattern }) phone!: string;
   @Prop({ select: false }) passwordHash?: string;
-  @Prop({ enum: memberTypes[MemberGroup.Customers], default: 'consumer' }) customerType!: string;
+  @Prop({ enum: memberTypes[MemberGroup.Customers] }) customerType?: string;
   @Prop({ enum: memberTypes[MemberGroup.Producers] }) producerType?: string;
   @Prop({ type: [String], enum: memberTypes[MemberGroup.Services], default: [] }) serviceTypes!: string[];
   @Prop({ trim: true, maxlength: 180 }) productionActivity?: string;

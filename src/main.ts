@@ -15,6 +15,7 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableShutdownHooks();
   app.useStaticAssets(join(__dirname, '..', 'public', 'catalog-demo'), { prefix: '/catalog-demo/' });
+  app.useStaticAssets(join(__dirname, '..', 'public', 'catalog-demo'), { prefix: '/web/catalog-demo/' });
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
     whitelist: true,
@@ -39,6 +40,9 @@ async function bootstrap() {
   }
   if (config.get<string>('SEED_CATALOG_DEMO') === 'true') {
     await app.get(CatalogDemoService).seed();
+  }
+  if (config.get<string>('SEED_MARKETPLACE_DEMO') === 'true' && process.env.NODE_ENV !== 'production') {
+    await app.get(MembersService).seedMarketplace();
   }
   await app.get(LocationsService).importMissing();
   await app.listen(config.getOrThrow<number>('PORT'));

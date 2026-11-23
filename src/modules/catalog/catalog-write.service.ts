@@ -16,7 +16,7 @@ const commonKeys = ['name', 'slug', 'imageUrl', 'thumbnailUrl', 'shortDescriptio
 const specificKeys: Record<CatalogCollection, string[]> = {
   [CatalogCollection.Brands]: [],
   [CatalogCollection.Categories]: ['parentId'],
-  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'saleUnit', 'saleUnits', 'gallery', 'priceAdjustment', 'physical', 'options'],
+  [CatalogCollection.Products]: ['sku', 'itemId', 'categoryId', 'brandId', 'kind', 'masterId', 'basePrice', 'price', 'saleUnit', 'saleUnits', 'gallery', 'maxOrderQuantity', 'priceAdjustment', 'physical', 'options'],
 };
 
 const idOf = (id: string) => new Types.ObjectId(id);
@@ -74,7 +74,7 @@ export class CatalogWriteService {
         if (!commonKeys.includes(key) && !specificKeys[collection].includes(key)) {
           throw new BadRequestException('این فیلد برای این فهرست معتبر نیست.');
         }
-        if (value === null && !['parentId', 'brandId', 'price'].includes(key)) {
+        if (value === null && !['parentId', 'brandId', 'price', 'maxOrderQuantity'].includes(key)) {
           throw new BadRequestException('مقدار خالی برای این فیلد معتبر نیست.');
         }
       }
@@ -143,6 +143,7 @@ export class CatalogWriteService {
       ...(input.saleUnit !== undefined && { saleUnit: input.saleUnit.trim() }),
       ...(input.saleUnits !== undefined && { saleUnits: input.saleUnits }),
       ...(input.gallery !== undefined && { gallery: input.gallery }),
+      ...(input.maxOrderQuantity !== undefined && { maxOrderQuantity: input.maxOrderQuantity }),
     };
     const kind = product?.kind ?? input.kind ?? 'master';
     if (product && input.kind && input.kind !== kind) throw new BadRequestException('نوع محصول پس از ایجاد ثابت است.');

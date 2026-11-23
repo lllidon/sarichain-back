@@ -56,6 +56,9 @@ export class CatalogWriteDto {
   @IsString({ each: true }) @MaxLength(2048, { each: true })
   @Matches(/^(?:https?:\/\/[a-z0-9][^\s/]*\/[^\s]*|\/(?!\/)[^\s\\]+)$/i, { each: true })
   gallery?: string[];
+  @ApiPropertyOptional({ type: 'integer', minimum: 1, nullable: true })
+  @IsOptional() @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER)
+  maxOrderQuantity?: number | null;
   @ApiPropertyOptional({ enum: ['master', 'variant'] }) @IsOptional() @IsIn(['master', 'variant']) kind?: 'master' | 'variant';
   @ApiPropertyOptional() @IsOptional() @IsMongoId() masterId?: string;
   @ApiPropertyOptional() @IsOptional() @IsMongoId() categoryId?: string;

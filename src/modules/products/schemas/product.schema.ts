@@ -118,6 +118,9 @@ export class Product extends CatalogEntry {
   @Prop({ type: [String], default: undefined })
   gallery?: string[];
 
+  @Prop({ type: Number, min: 1, max: Number.MAX_SAFE_INTEGER, validate: (value: number | null) => value === null || Number.isSafeInteger(value) })
+  maxOrderQuantity?: number | null;
+
   @Prop({ type: [SchemaFactory.createForClass(ProductOption)], default: [] })
   options!: ProductOption[];
 

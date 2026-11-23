@@ -12,7 +12,7 @@ import { MarketplaceAccounts } from './marketplace-account.service';
 
 class OrderLineDto {
   @ApiProperty() @IsMongoId() productId!: string;
-  @ApiProperty() @IsInt() @Min(1) @Max(1000) quantity!: number;
+  @ApiProperty() @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) quantity!: number;
   @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,29}$/) unitId?: string;
 }
 
@@ -86,13 +86,14 @@ export class WebOrdersController {
 
     const records = await this.products.find({
       _id: { $in: request.map(item => item.productId) }, isActive: true,
-    }).select('name price saleUnit saleUnits kind masterId').lean();
+    }).select('name price saleUnit saleUnits maxOrderQuantity kind masterId').lean();
     const products = new Map(records.map(product => [String(product._id), product]));
     const masterIds = records.flatMap(product => product.kind === 'variant' && product.masterId ? [product.masterId] : []);
     const parents = masterIds.length ? await this.products.find({ _id: { $in: masterIds }, kind: 'master', isActive: true })
-      .select('saleUnit saleUnits').lean() : [];
+      .select('name saleUnit saleUnits maxOrderQuantity').lean() : [];
     const masters = new Map(parents.map(product => [String(product._id), product]));
     const quantities = new Map<string, number>();
+    const familyQuantities = new Map<string, number>();
     const items = request.map(({ productId, quantity, unitId }) => {
       const product = products.get(productId);
       const parent = product?.kind === 'variant' ? masters.get(String(product.masterId)) : undefined;
@@ -103,10 +104,20 @@ export class WebOrdersController {
       const unitsPerPack = unit?.quantity ?? 1;
       const baseQuantity = quantity * unitsPerPack;
       const accumulated = (quantities.get(productId) ?? 0) + baseQuantity;
-      if (!Number.isSafeInteger(accumulated) || accumulated > 1000) {
-        throw new BadRequestException('حداکثر تعداد مجاز هر محصول ۱۰۰۰ واحد اصلی است.');
+      const familyId = parent ? String(parent._id) : productId;
+      const familyTotal = (familyQuantities.get(familyId) ?? 0) + baseQuantity;
+      if (!Number.isSafeInteger(accumulated) || !Number.isSafeInteger(familyTotal)) {
+        throw new BadRequestException('تعداد سفارش بیش از حد قابل محاسبه است.');
+      }
+      if (product.maxOrderQuantity != null && accumulated > product.maxOrderQuantity) {
+        throw new BadRequestException(`تعداد «${product.name}» از سقف ${product.maxOrderQuantity} واحد اصلی بیشتر است.`);
+      }
+      const familyLimit = parent ? parent.maxOrderQuantity : product.kind === 'master' ? product.maxOrderQuantity : null;
+      if (familyLimit != null && familyTotal > familyLimit) {
+        throw new BadRequestException(`تعداد «${parent?.name ?? product.name}» و گزینه‌های آن از سقف ${familyLimit} واحد اصلی بیشتر است.`);
       }
       quantities.set(productId, accumulated);
+      familyQuantities.set(familyId, familyTotal);
       return {
         productId, quantity, baseQuantity, name: product.name, unitId: unitId ?? 'unit',
         unitName: unit?.name ?? (product.saleUnit || parent?.saleUnit || 'واحد'), unitsPerPack,

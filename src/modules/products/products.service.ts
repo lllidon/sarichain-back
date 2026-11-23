@@ -14,6 +14,7 @@ type ProductInput = CatalogEntryInput & {
   saleUnit?: string;
   saleUnits?: SaleUnit[];
   gallery?: string[];
+  maxOrderQuantity?: number | null;
 };
 
 @Injectable()

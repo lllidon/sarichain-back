@@ -73,7 +73,7 @@ export class CatalogController {
   ) {
     switch (collection) {
       case CatalogCollection.Products:
-        return this.find(this.products, query, commonFields + ' sku itemId kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery priceAdjustment physical options',
+        return this.find(this.products, query, commonFields + ' sku itemId kind categoryId brandId masterId basePrice price saleUnit saleUnits gallery maxOrderQuantity priceAdjustment physical options',
           ['name', 'slug', 'sku', 'itemId'], ['categoryId', 'brandId', 'masterId', 'tagIds']);
       case CatalogCollection.Categories:
         return this.find(this.categories, query, commonFields + ' parentId level', ['name', 'slug'], ['parentId', 'tagIds']);

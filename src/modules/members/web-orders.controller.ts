@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Headers, Post } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -6,6 +6,7 @@ import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsMongoId, IsU
 import { createHash } from 'node:crypto';
 import { Model } from 'mongoose';
 import { Product } from '../products/schemas/product.schema';
+import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { MarketplaceAccounts } from './marketplace-account.service';
 
 class OrderLineDto {
@@ -28,6 +29,19 @@ export class WebOrdersController {
     private readonly accounts: MarketplaceAccounts,
     @InjectModel(Product.name) private readonly products: Model<Product>,
   ) {}
+
+  @Get()
+  async list(@Headers('authorization') authorization: string | undefined, @Query() { page, limit }: CatalogQueryDto) {
+    const member = await this.accounts.requireMember(authorization);
+    const orders = this.products.db.db!.collection('web_orders');
+    const filter = { memberId: member._id, status: { $nin: ['completed', 'cancelled'] } };
+    const [items, total] = await Promise.all([
+      orders.find(filter, { projection: { signature: 0, memberId: 0 } })
+        .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      orders.countDocuments(filter),
+    ]);
+    return { items, total, page, limit };
+  }
 
   @Post()
   async create(@Headers('authorization') authorization: string | undefined, @Body() input: WebOrderDto) {

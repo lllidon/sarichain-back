@@ -66,7 +66,8 @@ export class OrganizationController {
     if (!order) throw new NotFoundException('سفارش حمل پیدا نشد.');
     if (order.status !== 'pending_review' && order.status !== 'approved') throw new ConflictException('وضعیت این سفارش قابل بررسی مجدد نیست.');
     if (input.status === 'rejected') {
-      await orders.updateOne({ _id: order._id }, { $set: { status: 'rejected', reviewedAt: new Date(), updatedAt: new Date() }, $unset: { matchedCarrierIds: '', specialCarrierIds: '' } });
+      const rejected = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'rejected', reviewedAt: new Date(), updatedAt: new Date() }, $unset: { matchedCarrierIds: '', specialCarrierIds: '' } });
+      if (!rejected.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
       return { id, status: 'rejected' };
     }
     const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops);
@@ -78,7 +79,8 @@ export class OrganizationController {
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
     const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     const quote = quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs as typeof defaultTransportTariffs);
-    await orders.updateOne({ _id: order._id }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
+    const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
+    if (!approved.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
   }
 

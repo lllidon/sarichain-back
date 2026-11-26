@@ -19,14 +19,14 @@ export class WebTransportOrdersController {
   @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') authorization: string | undefined) {
     const member = await this.accounts.requireMember(authorization);
-    const own = await this.orders.find({ memberId: member._id })
+    const own = await this.orders.find({ memberId: member._id }, { projection: { memberId: 0, matchedCarrierIds: 0, specialCarrierIds: 0, assignedCarrierId: 0 } })
       .sort({ createdAt: -1, _id: -1 }).limit(30).toArray();
     const jobs = member.serviceTypes?.includes('driver') && member.driverReview?.status === 'approved'
       ? await this.orders.find({ $or: [
           { status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } },
           { status: { $in: ['assigned', 'in_transit', 'delivered'] }, assignedCarrierId: member._id },
         ] },
-        { projection: { memberId: 0, customer: 0, matchedCarrierIds: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
+        { projection: { memberId: 0, customer: 0, matchedCarrierIds: 0, assignedCarrierId: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
       : [];
     return {
       items: [

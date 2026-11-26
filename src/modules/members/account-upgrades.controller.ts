@@ -3,7 +3,6 @@ import { InjectConnection } from '@nestjs/mongoose';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
-import type { Express } from 'express';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from './marketplace-account.service';
@@ -32,7 +31,7 @@ export class AccountUpgradesController {
   async submit(
     @Headers('authorization') authorization: string | undefined,
     @Body() body: Record<string, unknown>,
-    @UploadedFiles() files: Record<string, Express.Multer.File[]>,
+    @UploadedFiles() files: Record<string, Array<{ originalname: string; mimetype: string; buffer: Buffer }>>,
   ) {
     const member = await this.accounts.requireMember(authorization);
     const kind = body.kind;

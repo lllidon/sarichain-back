@@ -153,10 +153,9 @@ export class AccountUpgradesController {
   @Get('members/account-upgrades')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  async list(@Req() request: AccessRequest, @Query('status') status = 'pending') {
+  async list(@Req() request: AccessRequest) {
     if (!['management', 'admin'].includes(request.access.role)) throw new BadRequestException('دسترسی مدیریت لازم است.');
-    const filter = status === 'all' ? {} : { status: 'pending' };
-    const rows = await this.requests.find(filter).sort({ createdAt: -1 }).limit(200).toArray();
+    const rows = await this.requests.find({ status: 'pending' }).sort({ createdAt: -1 }).limit(200).toArray();
     return { items: rows.map(row => ({ ...row, documents: (row.documents || []).map((doc: any) => ({
       type: doc.type, fileName: doc.fileName, mimeType: doc.mimeType,
       dataUrl: 'data:' + doc.mimeType + ';base64,' + this.decryptDocument(doc).toString('base64'),

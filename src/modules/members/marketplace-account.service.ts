@@ -59,7 +59,7 @@ export class MarketplaceAccounts {
         buy: true,
         sell: Boolean(member.producerType && member.sellerReview?.status === 'approved'),
         drive: Boolean(member.serviceTypes.includes('driver') && member.vehicle && member.driverReview?.status === 'approved'),
-        services: member.serviceTypes.filter(type => type !== 'driver' &&
+        services: (member.serviceTypes ?? []).filter(type => type !== 'driver' &&
           (!needsSpecialistReview([type]) || member.specialistReview?.status === 'approved')),
       },
     };

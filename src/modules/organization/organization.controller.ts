@@ -15,7 +15,12 @@ enum SettingsList {
   Profiles = 'profiles',
 }
 
-class TransportOrderReviewDto {\n  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';\n  @IsOptional() @IsArray() @ArrayMaxSize(2) @IsMongoId({ each: true }) specialCarrierIds?: string[];\n}\nclass SettingsInput {
+class TransportOrderReviewDto {
+  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
+  @IsOptional() @IsArray() @ArrayMaxSize(2) @IsMongoId({ each: true }) specialCarrierIds?: string[];
+}
+
+class SettingsInput {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(140) name?: string;
   @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,39}$/i) code?: string;
   @IsOptional() @IsString() @MaxLength(600) description?: string;

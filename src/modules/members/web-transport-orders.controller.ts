@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
 import { InjectConnection } from '@nestjs/mongoose';
 import { MarketplaceAccounts } from './marketplace-account.service';
-import { TransportOrderDto, TransportTariffRecord, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from './transport-orders';
+import { TransportOrderDto, TransportZoneTariffRecord, defaultTransportZoneTariffs, findEligibleTransportCarriers, quoteTransportOrder } from './transport-orders';
 
 @ApiTags('web')
 @ApiBearerAuth()
@@ -45,8 +45,8 @@ export class WebTransportOrdersController {
     const dropoffs = input.stops.filter(stop => stop.kind === 'dropoff');
     if (!pickups.length || !dropoffs.length) throw new BadRequestException('حداقل یک مبدأ و یک مقصد لازم است.');
     if (new Date(input.deadline).getTime() <= Date.now()) throw new BadRequestException('مهلت تحویل باید در آینده باشد.');
-    const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
-    const quote = quoteTransportOrder(input.stops, input.weightKg, input.volumeM3, input.urgency, tariffs);
+    const tariffs = await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs').findOne({ _id: 'default' }) ?? defaultTransportZoneTariffs;
+    const quote = await quoteTransportOrder(input.stops, input.weightKg, input.volumeM3, input.urgency, tariffs);
     const now = new Date();
     await this.orders.createIndex({ memberId: 1, createdAt: -1 }, { name: 'transport_customer_orders' });
     await this.orders.createIndex({ status: 1, matchedCarrierIds: 1, assignedCarrierId: 1 }, { name: 'transport_carrier_feed' });

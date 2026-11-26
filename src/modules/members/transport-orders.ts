@@ -112,7 +112,7 @@ export async function findEligibleTransportCarriers(db: import('mongodb').Db, we
     const member = memberMap.get(String(vehicle.memberId));
     if (!member) continue;
     const area = typeof member.serviceArea === 'string' ? normalize(member.serviceArea) : '';
-    const areaTokens = area.split(/[،,؛;\\s]+/).filter(part => part.length > 2 && !['استان', 'شهرستان', 'شهر'].includes(part));
+    const areaTokens = area.split(/[،,؛;\s]+/).filter(part => part.length > 2 && !['استان', 'شهرستان', 'شهر'].includes(part));
     const nationwide = /کل کشور|سراسری|ایران/.test(area);
     if (area && !nationwide && !routeText.includes(area) && areaTokens.length && !areaTokens.some(part => routeText.includes(part))) continue;
     const memberId = String(member._id);

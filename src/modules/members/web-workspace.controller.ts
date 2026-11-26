@@ -111,7 +111,7 @@ export class WebWorkspaceController {
     await this.vehicles.createIndex({ memberId: 1 }, { unique: true, name: 'uniq_member_vehicle' });
     await this.vehicles.updateOne(
       { memberId: member._id },
-      { $set: { ...input, memberId: member._id, updatedAt: now }, $setOnInsert: { createdAt: now } },
+      { $set: { ...input, memberId: member._id, updatedAt: now }, $setOnInsert: { createdAt: now }, ...(input.capacityM3 === undefined ? { $unset: { capacityM3: '' } } : {}) },
       { upsert: true },
     );
     const { _id, memberId, createdAt, updatedAt, ...vehicle } = (await this.vehicles.findOne({ memberId: member._id }))!;

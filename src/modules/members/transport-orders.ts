@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 export const transportUrgencies = ['hourly', 'daily', 'multiday'] as const;
@@ -19,7 +19,7 @@ function TransformText() {
     // Keep validation decorators local and avoid silently coercing non-text payloads.
     IsString()(target, propertyKey);
     Length(1, propertyKey === 'address' ? 240 : 100)(target, propertyKey);
-    Type(() => String)(target, propertyKey);
+    Transform(({ value }) => typeof value === 'string' ? value.trim() : value)(target, propertyKey);
   };
 }
 

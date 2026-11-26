@@ -50,12 +50,12 @@ export class OrganizationController {
       orders.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
     ]);
-    const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const zoneTariffs = await this.readZoneTariffs();
     const enriched = await Promise.all(items.map(async order => ({
       ...order,
       ...(order.status === 'pending_review' || order.status === 'approved' ? {
         quote: await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs()),
-        candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops),
+        candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops, zoneTariffs.densityKgPerM3),
       } : { candidates: [] }),
     })));
     return { items: enriched, total, page, limit };
@@ -74,7 +74,8 @@ export class OrganizationController {
       if (!rejected.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
       return { id, status: 'rejected' };
     }
-    const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops);
+    const zoneTariffs = await this.readZoneTariffs();
+    const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops, zoneTariffs.densityKgPerM3);
     if (!candidates.length) throw new BadRequestException('برای این سفارش همکار راننده واجد شرایط پیدا نشد.');
     const eligible = new Set(candidates.map(candidate => candidate.memberId));
     const special = (input.specialCarrierIds ?? []).map(value => value.toLowerCase());
@@ -82,7 +83,7 @@ export class OrganizationController {
     const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
     const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
-    const quote = await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs());
+    const quote = await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, zoneTariffs);
     if (quote.routingPending) throw new BadRequestException('مسافت جاده‌ای در دسترس نیست؛ تا اتصال سرویس مسیریابی، تأیید و انتشار سفارش ممکن نیست.');
     const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
     if (!approved.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');

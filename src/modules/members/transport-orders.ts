@@ -95,7 +95,7 @@ function haversine(a: TransportStopDto, b: TransportStopDto) {
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 function zoneForDistance(distanceKm: number) {
-  return zoneDefinitions.find(zone => distanceKm >= zone.minKm && (zone.maxKm === null || distanceKm < zone.maxKm)) ?? zoneDefinitions[5];
+  return zoneDefinitions.find(zone => distanceKm >= zone.minKm && (zone.maxKm === null || distanceKm < zone.maxKm || (zone.id === 'zone-4' && distanceKm <= zone.maxKm))) ?? zoneDefinitions[5];
 }
 async function roadLegKm(a: TransportStopDto, b: TransportStopDto): Promise<number | null> {
   const base = process.env.ROUTING_SERVICE_URL?.replace(/\\/$/, '') || 'https://router.project-osrm.org';

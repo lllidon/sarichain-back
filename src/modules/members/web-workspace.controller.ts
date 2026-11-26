@@ -1,9 +1,9 @@
-import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Header, Headers, HttpCode, NotFoundException, Param, ParseEnumPipe, Post, Query, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get, Header, Headers, HttpCode, NotFoundException, Param, ParseEnumPipe, Patch, Post, Query, StreamableFile, UploadedFile, UseInterceptors } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsDateString, IsIn, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
+import { IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Connection, Types, isObjectIdOrHexString, mongo } from 'mongoose';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { maxUploadImageBytes, prepareUploadedImage } from '../catalog/image-processing';
@@ -26,6 +26,28 @@ class WorkspaceEntryDto {
   @ApiProperty()
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @Length(1, 1000) details!: string;
+}
+
+
+const vehicleTypes = ['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'] as const;
+
+class VehicleProfileDto {
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsIn(vehicleTypes) type!: (typeof vehicleTypes)[number];
+  @IsOptional() @IsString() @MaxLength(40) className?: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @Length(2, 100) model!: string;
+  @IsInt() @Min(1300) @Max(1500) year!: number;
+  @IsInt() @Min(1) @Max(100000) capacityKg!: number;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @Length(3, 40) plate!: string;
+  @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
+  @IsString() @Length(3, 80) license!: string;
+  @IsOptional() @IsString() @MaxLength(40) licenseClass?: string;
+  @IsOptional() @IsString() @MaxLength(40) bodyType?: string;
+  @IsOptional() @IsString() @Matches(/^(?:\d{4}\/\d{2}\/\d{2})?$/) insuranceExpiry?: string;
+  @IsOptional() @IsString() @Matches(/^(?:\d{4}\/\d{2}\/\d{2})?$/) technicalInspectionExpiry?: string;
+  @IsOptional() @IsString() @MaxLength(500) description?: string;
 }
 
 class ProductOfferDto {
@@ -63,6 +85,36 @@ export class WebWorkspaceController {
 
   private get entries() {
     return this.connection.db!.collection('web_workspace_entries');
+  }
+
+
+  private get vehicles() {
+    return this.connection.db!.collection('member_vehicles');
+  }
+
+  @Get('transport/vehicle')
+  @Header('Cache-Control', 'private, no-store')
+  async getVehicle(@Headers('authorization') authorization: string | undefined) {
+    const member = await this.accounts.requireMember(authorization);
+    const record = await this.vehicles.findOne({ memberId: member._id });
+    if (!record) return { vehicle: null };
+    const { _id, memberId, createdAt, updatedAt, ...vehicle } = record;
+    return { vehicle };
+  }
+
+  @Patch('transport/vehicle')
+  @Header('Cache-Control', 'private, no-store')
+  async saveVehicle(@Headers('authorization') authorization: string | undefined, @Body() input: VehicleProfileDto) {
+    const member = await this.accounts.requireMember(authorization);
+    const now = new Date();
+    await this.vehicles.createIndex({ memberId: 1 }, { unique: true, name: 'uniq_member_vehicle' });
+    await this.vehicles.updateOne(
+      { memberId: member._id },
+      { $set: { ...input, memberId: member._id, updatedAt: now }, $setOnInsert: { createdAt: now } },
+      { upsert: true },
+    );
+    const { _id, memberId, createdAt, updatedAt, ...vehicle } = (await this.vehicles.findOne({ memberId: member._id }))!;
+    return { vehicle };
   }
 
   @Get(':section')

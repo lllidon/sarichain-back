@@ -182,7 +182,7 @@ export class WebWorkspaceController {
   @Post('products/offers')
   async createOffer(@Headers('authorization') authorization: string | undefined, @Body() input: ProductOfferDto) {
     const member = await this.accounts.requireMember(authorization);
-    if (!member.producerType) throw new ForbiddenException();
+    if (!member.producerType || member.sellerReview?.status !== 'approved') throw new ForbiddenException('حساب تولیدکننده شما هنوز تأیید نشده است.');
     const location = input.locationId ? await this.entries.findOne({
       _id: new Types.ObjectId(input.locationId), section: Section.Orchards, memberId: member._id,
     }, { projection: { title: 1 } }) : null;
@@ -193,6 +193,8 @@ export class WebWorkspaceController {
     const product = await products.findOne({ _id: productId, isActive: true, kind: { $in: ['master', 'variant'] } },
       { projection: fields });
     if (!product) throw new BadRequestException('این محصول قابل انتخاب نیست.');
+    const allowedCategories = member.allowedProductCategoryIds ?? [];
+    if (!allowedCategories.includes(String(product.categoryId))) throw new ForbiddenException('این دسته‌بندی در مجوز فعالیت تولیدی شما قرار ندارد.');
     const parent = product.kind === 'variant'
       ? await products.findOne({ _id: product.masterId, kind: 'master', isActive: true }, { projection: fields })
       : null;

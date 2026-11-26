@@ -6,7 +6,6 @@ import { verifyPassword } from '../auth/password';
 import { LocationsService } from '../locations/locations.service';
 import { MarketplaceLoginDto, MarketplaceProfileDto } from './marketplace.dto';
 import { MarketplaceMember } from './member.schemas';
-import { needsSpecialistReview } from './member-types';
 
 @Injectable()
 export class MarketplaceAccounts {
@@ -72,18 +71,7 @@ export class MarketplaceAccounts {
   async update(authorization: string | undefined, input: MarketplaceProfileDto) {
     const member = await this.requireMember(authorization);
     if (Object.values(input).some(value => value === null)) throw new BadRequestException('مقدار خالی نامعتبر است.');
-    const previous = member.serviceTypes ?? [];
-    const services = previous;
-    const wantsDriver = services.includes('driver');
-    const specialist = needsSpecialistReview(services);
-    const vehicle = input.vehicle ?? member.vehicle;
-    const credential = input.serviceCredential ?? member.serviceCredential;
-    if (specialist && !credential) throw new BadRequestException('برای نظارت یا کنترل کیفیت، مرجع مدرک را ثبت کنید.');
-
     const producerType = member.producerType;
-    const vehicleChanged = input.vehicle !== undefined && (
-      input.vehicle.type !== member.vehicle?.type || input.vehicle.plate !== member.vehicle?.plate || input.vehicle.license !== member.vehicle?.license
-    );
     const changed = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
     delete changed.producerType;
     delete changed.serviceTypes;

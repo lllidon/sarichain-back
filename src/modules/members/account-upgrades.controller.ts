@@ -150,7 +150,7 @@ export class AccountUpgradesController {
     return { items: rows };
   }
 
-  @Get('members/account-upgrades')
+  @Get('members/account-upgrades/requests')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
   async list(@Req() request: AccessRequest) {

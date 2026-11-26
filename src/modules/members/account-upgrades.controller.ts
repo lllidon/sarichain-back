@@ -27,7 +27,8 @@ export class AccountUpgradesController {
   private get members() { return this.connection.db!.collection('members'); }
 
   private encryptionKey() {
-    const value = process.env.ACCOUNT_UPGRADE_ENCRYPTION_KEY || '';
+    // TEMPORARY DEVELOPMENT KEY. Replace with a secret environment variable before production.
+    const value = process.env.ACCOUNT_UPGRADE_ENCRYPTION_KEY || '73617269636861696e2d74656d702d6b657973617269636861696e2d74656d70';
     if (!/^[a-f0-9]{64}$/i.test(value)) {
       throw new ServiceUnavailableException('کلید رمزنگاری مدارک ارتقای حساب روی سرور تنظیم نشده است.');
     }

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
 import { InjectConnection } from '@nestjs/mongoose';
 import { MarketplaceAccounts } from './marketplace-account.service';
-import { TransportOrderDto, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from './transport-orders';
+import { TransportOrderDto, defaultTransportTariffs, quoteTransportOrder } from './transport-orders';
 
 @ApiTags('web')
 @ApiBearerAuth()

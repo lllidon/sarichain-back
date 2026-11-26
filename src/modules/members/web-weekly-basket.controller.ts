@@ -44,11 +44,13 @@ export class WebWeeklyBasketController {
   @Post('items')
   async mutate(@Headers('authorization') authorization: string | undefined, @Body() input: WeeklyBasketMutation) {
     const member = await this.accounts.requireMember(authorization);
-    const productId = new Types.ObjectId(input.productId);
-    const product = await this.connection.db!.collection('products').findOne(
-      { _id: productId, isActive: { $ne: false } }, { projection: { _id: 1 } },
-    );
-    if (!product) throw new BadRequestException('محصول انتخاب‌شده در دسترس نیست.');
+    if (input.operation !== 'remove') {
+      const productId = new Types.ObjectId(input.productId);
+      const product = await this.connection.db!.collection('products').findOne(
+        { _id: productId, isActive: { $ne: false } }, { projection: { _id: 1 } },
+      );
+      if (!product) throw new BadRequestException('محصول انتخاب‌شده در دسترس نیست.');
+    }
 
     for (let attempt = 0; attempt < 8; attempt++) {
       const current = await this.baskets.findOne({ _id: member._id });

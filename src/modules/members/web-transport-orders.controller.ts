@@ -22,7 +22,10 @@ export class WebTransportOrdersController {
     const own = await this.orders.find({ memberId: member._id })
       .sort({ createdAt: -1, _id: -1 }).limit(30).toArray();
     const jobs = member.serviceTypes?.includes('driver') && member.driverReview?.status === 'approved'
-      ? await this.orders.find({ status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } },
+      ? await this.orders.find({ $or: [
+          { status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } },
+          { status: { $in: ['assigned', 'in_transit', 'delivered'] }, assignedCarrierId: member._id },
+        ] },
         { projection: { memberId: 0, customer: 0, matchedCarrierIds: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
       : [];
     return {

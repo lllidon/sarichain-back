@@ -61,7 +61,7 @@ export class WebWeeklyBasketController {
         if (index >= 0) items.splice(index, 1);
       } else if (input.operation === 'set') {
         const quantity = input.quantity;
-        if (!Number.isSafeInteger(quantity) || !quantity || quantity < 1 || quantity > 9999) {
+        if (typeof quantity !== 'number' || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 9999) {
           throw new BadRequestException('تعداد باید بین ۱ تا ۹۹۹۹ باشد.');
         }
         if (index >= 0) items[index] = { productId: input.productId, quantity };

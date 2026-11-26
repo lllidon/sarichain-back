@@ -39,14 +39,14 @@ export class AccountUpgradesController {
       throw new BadRequestException('نوع درخواست ارتقا معتبر نیست.');
     }
     const required = kind === 'transport' ? ['nationalId', 'driverLicense', 'vehicleCard'] : ['nationalId', 'productionProof'];
-    const documents: Array<{ type: string; fileName: string; mimeType: string; data: Buffer }> = [];
+    const documents: Array<{ type: string; fileName: string; mimeType: string; data: string }> = [];
     for (const type of documentKinds) {
       const file = files?.[type]?.[0];
       if (required.includes(type) && !file) throw new BadRequestException('تمام مدارک الزامی را بارگذاری کنید.');
       if (!file) continue;
       if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype) ||
         !file.buffer || file.buffer.length > 2 * 1024 * 1024) throw new BadRequestException('نوع یا حجم یکی از مدارک معتبر نیست.');
-      documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, data: file.buffer });
+      documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, data: file.buffer.toString('base64') });
     }
     let vehicle: Record<string, unknown> | undefined;
     let producerType: string | undefined;
@@ -127,7 +127,7 @@ export class AccountUpgradesController {
     const rows = await this.requests.find(filter).sort({ createdAt: -1 }).limit(200).toArray();
     return { items: rows.map(row => ({ ...row, documents: (row.documents || []).map((doc: any) => ({
       type: doc.type, fileName: doc.fileName, mimeType: doc.mimeType,
-      dataUrl: 'data:' + doc.mimeType + ';base64,' + (Buffer.isBuffer(doc.data) ? doc.data.toString('base64') : String(doc.data || '')),
+      dataUrl: 'data:' + doc.mimeType + ';base64,' + String(doc.data || ''),
     })) })) };
   }
 

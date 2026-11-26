@@ -1,37 +1,19 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
+import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsIn, IsInt, IsMongoId, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
+import type { Express } from 'express';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from './marketplace-account.service';
 
 const requestKinds = ['transport', 'producer'] as const;
 const documentKinds = ['nationalId', 'driverLicense', 'vehicleCard', 'productionProof'] as const;
-
-class UpgradeVehicleDto {
-  @IsString() @MaxLength(40) type!: string;
-  @IsString() @MaxLength(100) model!: string;
-  @IsInt() @Min(1300) @Max(1500) year!: number;
-  @IsInt() @Min(1) @Max(100000) capacityKg!: number;
-  @IsOptional() @IsNumber() @Min(0.01) capacityM3?: number;
-  @IsString() @MaxLength(40) plate!: string;
-  @IsString() @MaxLength(80) license!: string;
-}
-
-class UpgradeRequestDto {
-  @IsIn(requestKinds) kind!: typeof requestKinds[number];
-  @IsOptional() @IsString() @MaxLength(30) producerType?: string;
-  @IsOptional() @IsObject() vehicle?: UpgradeVehicleDto;
-  @IsOptional() @IsArray() @IsMongoId({ each: true }) requestedCategoryIds?: string[];
-  @IsArray() documents!: Array<{ type: string; fileName: string; mimeType: string; data: string }>;
-}
-
-class UpgradeReviewDto {
-  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
-  @IsOptional() @IsString() @MaxLength(500) note?: string;
-}
+const uploadFields = [
+  { name: 'nationalId', maxCount: 1 }, { name: 'driverLicense', maxCount: 1 },
+  { name: 'vehicleCard', maxCount: 1 }, { name: 'productionProof', maxCount: 1 },
+];
 
 @ApiTags('account-upgrades')
 @Controller()
@@ -46,56 +28,86 @@ export class AccountUpgradesController {
 
   @Post('web/account-upgrades')
   @ApiBearerAuth()
-  async submit(@Headers('authorization') authorization: string | undefined, @Body() input: UpgradeRequestDto) {
+  @UseInterceptors(FileFieldsInterceptor(uploadFields, { limits: { fileSize: 2 * 1024 * 1024, files: 4 } }))
+  async submit(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: Record<string, unknown>,
+    @UploadedFiles() files: Record<string, Express.Multer.File[]>,
+  ) {
     const member = await this.accounts.requireMember(authorization);
-    if (!Array.isArray(input.documents) || input.documents.length > 6) throw new BadRequestException('تعداد مدارک نامعتبر است.');
-    const required = input.kind === 'transport' ? ['nationalId', 'driverLicense', 'vehicleCard'] : ['nationalId', 'productionProof'];
-    const docs = new Map<string, { type: string; fileName: string; mimeType: string; data: string }>();
-    for (const doc of input.documents) {
-      if (!doc || !documentKinds.includes(doc.type as typeof documentKinds[number]) ||
-        typeof doc.fileName !== 'string' || doc.fileName.length > 120 ||
-        !['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(doc.mimeType) ||
-        typeof doc.data !== 'string' || !/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(doc.data) ||
-        doc.data.length > 2_800_000) throw new BadRequestException('یکی از مدارک معتبر نیست یا حجم آن بیش از حد مجاز است.');
-      docs.set(doc.type, doc);
+    const kind = body.kind;
+    if (typeof kind !== 'string' || !requestKinds.includes(kind as typeof requestKinds[number])) {
+      throw new BadRequestException('نوع درخواست ارتقا معتبر نیست.');
     }
-    if (required.some(type => !docs.has(type))) throw new BadRequestException('تمام مدارک الزامی این درخواست را بارگذاری کنید.');
-    if (input.kind === 'transport') {
-      if (!input.vehicle || !['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'].includes(input.vehicle.type) ||
-        typeof input.vehicle.model !== 'string' || input.vehicle.model.trim().length < 2 ||
-        typeof input.vehicle.plate !== 'string' || input.vehicle.plate.trim().length < 3 ||
-        typeof input.vehicle.license !== 'string' || input.vehicle.license.trim().length < 3 ||
-        !Number.isInteger(input.vehicle.year) || input.vehicle.year < 1300 || input.vehicle.year > 1500 ||
-        !Number.isInteger(input.vehicle.capacityKg) || input.vehicle.capacityKg < 1 || input.vehicle.capacityKg > 100000 ||
-        (input.vehicle.capacityM3 !== undefined && (!Number.isFinite(input.vehicle.capacityM3) || input.vehicle.capacityM3 <= 0))) {
-        throw new BadRequestException('مشخصات وسیله نقلیه را کامل کنید.');
+    const required = kind === 'transport' ? ['nationalId', 'driverLicense', 'vehicleCard'] : ['nationalId', 'productionProof'];
+    const documents: Array<{ type: string; fileName: string; mimeType: string; data: Buffer }> = [];
+    for (const type of documentKinds) {
+      const file = files?.[type]?.[0];
+      if (required.includes(type) && !file) throw new BadRequestException('تمام مدارک الزامی را بارگذاری کنید.');
+      if (!file) continue;
+      if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype) ||
+        !file.buffer || file.buffer.length > 2 * 1024 * 1024) throw new BadRequestException('نوع یا حجم یکی از مدارک معتبر نیست.');
+      documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, data: file.buffer });
+    }
+    let vehicle: Record<string, unknown> | undefined;
+    let producerType: string | undefined;
+    let requestedCategoryIds: string[] = [];
+    let requestedCategoryLabels: string[] = [];
+    if (kind === 'transport') {
+      try { vehicle = typeof body.vehicle === 'string' ? JSON.parse(body.vehicle) : undefined; } catch { vehicle = undefined; }
+      const validTypes = ['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'];
+      if (!vehicle || typeof vehicle.type !== 'string' || !validTypes.includes(vehicle.type) ||
+        typeof vehicle.model !== 'string' || vehicle.model.trim().length < 2 || vehicle.model.length > 100 ||
+        !Number.isInteger(vehicle.year) || Number(vehicle.year) < 1300 || Number(vehicle.year) > 1500 ||
+        !Number.isInteger(vehicle.capacityKg) || Number(vehicle.capacityKg) < 1 || Number(vehicle.capacityKg) > 100000 ||
+        (vehicle.capacityM3 !== undefined && (!Number.isFinite(Number(vehicle.capacityM3)) || Number(vehicle.capacityM3) <= 0)) ||
+        typeof vehicle.plate !== 'string' || vehicle.plate.trim().length < 3 || vehicle.plate.length > 40 ||
+        typeof vehicle.license !== 'string' || vehicle.license.trim().length < 3 || vehicle.license.length > 80) {
+        throw new BadRequestException('مشخصات وسیله نقلیه را کامل و صحیح وارد کنید.');
       }
+      vehicle = { ...vehicle, model: vehicle.model.trim(), plate: vehicle.plate.trim(), license: vehicle.license.trim() };
+    } else {
+      producerType = typeof body.producerType === 'string' ? body.producerType : '';
+      if (!['orchard', 'farm', 'dairy', 'greenhouse', 'other'].includes(producerType)) {
+        throw new BadRequestException('نوع فعالیت تولیدی را انتخاب کنید.');
+      }
+      try {
+        const raw = typeof body.requestedCategoryIds === 'string' ? JSON.parse(body.requestedCategoryIds) : [];
+        if (Array.isArray(raw)) requestedCategoryIds = [...new Set(raw.filter((id): id is string => typeof id === 'string'))];
+      } catch { requestedCategoryIds = []; }
+      if (!requestedCategoryIds.length || requestedCategoryIds.length > 20 || requestedCategoryIds.some(id => !isObjectIdOrHexString(id))) {
+        throw new BadRequestException('حداقل یک دسته‌بندی محصول معتبر انتخاب کنید.');
+      }
+      const categoryRows = await this.connection.db!.collection('categories').find(
+        { _id: { $in: requestedCategoryIds.map(id => new Types.ObjectId(id)) } }, { projection: { name: 1 } },
+      ).toArray();
+      if (categoryRows.length !== requestedCategoryIds.length) throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
+      requestedCategoryLabels = categoryRows.map(row => String(row.name || ''));
     }
-    if (input.kind === 'producer') {
-      if (!['orchard', 'farm', 'dairy', 'greenhouse', 'other'].includes(input.producerType || '')) throw new BadRequestException('نوع فعالیت تولیدی را انتخاب کنید.');
-      if (!Array.isArray(input.requestedCategoryIds) || input.requestedCategoryIds.length < 1 || input.requestedCategoryIds.length > 20 ||
-        input.requestedCategoryIds.some(id => !isObjectIdOrHexString(id))) throw new BadRequestException('حداقل یک دسته‌بندی محصول انتخاب کنید.');
+
+    await this.requests.createIndex({ memberId: 1, kind: 1 }, {
+      unique: true, partialFilterExpression: { status: 'pending' }, name: 'uniq_pending_member_upgrade_kind',
+    });
+    if (await this.requests.findOne({ memberId: member._id, kind, status: 'pending' })) {
+      throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
     }
-    await this.requests.createIndex({ memberId: 1, kind: 1 }, { unique: true, partialFilterExpression: { status: 'pending' }, name: 'uniq_pending_member_upgrade_kind' });
-    const existing = await this.requests.findOne({ memberId: member._id, kind: input.kind, status: 'pending' });
-    if (existing) throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
     const now = new Date();
-    let categoryLabels: string[] = [];
-    if (input.kind === 'producer') {
-      const ids = [...new Set(input.requestedCategoryIds)];
-      const categoryRows = await this.connection.db!.collection('categories').find({ _id: { $in: ids.map(id => new Types.ObjectId(id)) } }, { projection: { name: 1 } }).toArray();
-      if (categoryRows.length !== ids.length) throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
-      categoryLabels = categoryRows.map(row => String(row.name || ''));
-    }
     const record = {
-      memberId: member._id, kind: input.kind, status: 'pending', documents: [...docs.values()],
-      ...(input.kind === 'producer' && { producerType: input.producerType, requestedCategoryIds: [...new Set(input.requestedCategoryIds)], requestedCategoryLabels: categoryLabels }),
-      ...(input.kind === 'transport' && { vehicle: input.vehicle }),
+      memberId: member._id, kind, status: 'pending', documents,
+      ...(kind === 'producer' && { producerType, requestedCategoryIds, requestedCategoryLabels }),
+      ...(kind === 'transport' && { vehicle }),
       memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
       createdAt: now, updatedAt: now,
     };
-    const result = await this.requests.insertOne(record);
-    return { id: result.insertedId, status: 'pending' };
+    try {
+      const result = await this.requests.insertOne(record);
+      return { id: result.insertedId, status: 'pending' };
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+        throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
+      }
+      throw error;
+    }
   }
 
   @Get('web/account-upgrades')
@@ -112,19 +124,23 @@ export class AccountUpgradesController {
   @UseGuards(AccessTokenGuard)
   async list(@Req() request: AccessRequest, @Query('status') status = 'pending') {
     if (!['management', 'admin'].includes(request.access.role)) throw new BadRequestException('دسترسی مدیریت لازم است.');
-    const filter = status === 'all' ? {} : { status: { $in: ['pending', 'approved', 'rejected'] }, ...(status === 'pending' ? { status: 'pending' } : { status }) };
+    const filter = status === 'all' ? {} : { status: 'pending' };
     const rows = await this.requests.find(filter).sort({ createdAt: -1 }).limit(200).toArray();
     return { items: rows.map(row => ({ ...row, documents: (row.documents || []).map((doc: any) => ({
-      type: doc.type, fileName: doc.fileName, mimeType: doc.mimeType, dataUrl: 'data:' + doc.mimeType + ';base64,' + doc.data,
+      type: doc.type, fileName: doc.fileName, mimeType: doc.mimeType,
+      dataUrl: 'data:' + doc.mimeType + ';base64,' + (Buffer.isBuffer(doc.data) ? doc.data.toString('base64') : String(doc.data || '')),
     })) })) };
   }
 
   @Patch('members/account-upgrades/:id/review')
   @ApiBearerAuth()
   @UseGuards(AccessTokenGuard)
-  async review(@Req() request: AccessRequest, @Param('id') id: string, @Body() input: UpgradeReviewDto) {
+  async review(@Req() request: AccessRequest, @Param('id') id: string, @Body() input: { status?: string; note?: string }) {
     if (!['management', 'admin'].includes(request.access.role)) throw new BadRequestException('دسترسی مدیریت لازم است.');
-    if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه درخواست معتبر نیست.');
+    if (!isObjectIdOrHexString(id) || !['approved', 'rejected'].includes(input.status || '') ||
+      (input.note !== undefined && (typeof input.note !== 'string' || input.note.length > 500))) {
+      throw new BadRequestException('تصمیم یا شناسه درخواست معتبر نیست.');
+    }
     const row = await this.requests.findOne({ _id: new Types.ObjectId(id), status: 'pending' });
     if (!row) throw new BadRequestException('این درخواست قبلاً بررسی شده یا وجود ندارد.');
     const now = new Date();
@@ -135,19 +151,20 @@ export class AccountUpgradesController {
         }, { upsert: true });
         await this.members.updateOne({ _id: row.memberId }, {
           $addToSet: { serviceTypes: 'driver' },
-          $set: { vehicle: { type: row.vehicle.type, plate: row.vehicle.plate, license: row.vehicle.license }, driverReview: { status: 'approved', reviewedAt: now, reviewedBy: String(request.userId) }, updatedAt: now },
+          $set: { vehicle: { type: row.vehicle.type, plate: row.vehicle.plate, license: row.vehicle.license },
+            driverReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId }, updatedAt: now },
         });
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست تولیدکننده دسته‌بندی مجاز ندارد.');
         await this.members.updateOne({ _id: row.memberId }, {
-          $set: { producerType: row.producerType, sellerReview: { status: 'approved', reviewedAt: now, reviewedBy: String(request.userId) },
+          $set: { producerType: row.producerType, sellerReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId },
             allowedProductCategoryIds: categories, updatedAt: now },
         });
       }
     }
     await this.requests.updateOne({ _id: row._id, status: 'pending' }, {
-      $set: { status: input.status, reviewNote: input.note?.trim() || '', reviewedAt: now, reviewedBy: String(request.userId), updatedAt: now },
+      $set: { status: input.status, reviewNote: input.note?.trim() || '', reviewedAt: now, reviewedBy: request.userId, updatedAt: now },
     });
     return { id, status: input.status };
   }

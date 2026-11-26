@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsArray, IsIn, IsMongoId, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsArray, IsIn, IsInt, IsMongoId, IsNumber, IsObject, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
@@ -10,9 +10,20 @@ import { MarketplaceAccounts } from './marketplace-account.service';
 const requestKinds = ['transport', 'producer'] as const;
 const documentKinds = ['nationalId', 'driverLicense', 'vehicleCard', 'productionProof'] as const;
 
+class UpgradeVehicleDto {
+  @IsString() @MaxLength(40) type!: string;
+  @IsString() @MaxLength(100) model!: string;
+  @IsInt() @Min(1300) @Max(1500) year!: number;
+  @IsInt() @Min(1) @Max(100000) capacityKg!: number;
+  @IsOptional() @IsNumber() @Min(0.01) capacityM3?: number;
+  @IsString() @MaxLength(40) plate!: string;
+  @IsString() @MaxLength(80) license!: string;
+}
+
 class UpgradeRequestDto {
   @IsIn(requestKinds) kind!: typeof requestKinds[number];
   @IsOptional() @IsString() @MaxLength(30) producerType?: string;
+  @IsOptional() @IsObject() vehicle?: UpgradeVehicleDto;
   @IsOptional() @IsArray() @IsMongoId({ each: true }) requestedCategoryIds?: string[];
   @IsArray() documents!: Array<{ type: string; fileName: string; mimeType: string; data: string }>;
 }
@@ -49,6 +60,12 @@ export class AccountUpgradesController {
       docs.set(doc.type, doc);
     }
     if (required.some(type => !docs.has(type))) throw new BadRequestException('تمام مدارک الزامی این درخواست را بارگذاری کنید.');
+    if (input.kind === 'transport') {
+      if (!input.vehicle || !['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'].includes(input.vehicle.type) ||
+        input.vehicle.model.trim().length < 2 || input.vehicle.plate.trim().length < 3 || input.vehicle.license.trim().length < 3) {
+        throw new BadRequestException('مشخصات وسیله نقلیه را کامل کنید.');
+      }
+    }
     if (input.kind === 'producer') {
       if (!['orchard', 'farm', 'dairy', 'greenhouse', 'other'].includes(input.producerType || '')) throw new BadRequestException('نوع فعالیت تولیدی را انتخاب کنید.');
       if (!Array.isArray(input.requestedCategoryIds) || input.requestedCategoryIds.length < 1 || input.requestedCategoryIds.length > 20 ||
@@ -60,6 +77,7 @@ export class AccountUpgradesController {
     const record = {
       memberId: member._id, kind: input.kind, status: 'pending', documents: [...docs.values()],
       ...(input.kind === 'producer' && { producerType: input.producerType, requestedCategoryIds: [...new Set(input.requestedCategoryIds)] }),
+      ...(input.kind === 'transport' && { vehicle: input.vehicle }),
       memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
       createdAt: now, updatedAt: now,
     };
@@ -99,9 +117,12 @@ export class AccountUpgradesController {
     const now = new Date();
     if (input.status === 'approved') {
       if (row.kind === 'transport') {
+        await this.connection.db!.collection('member_vehicles').updateOne({ memberId: row.memberId }, {
+          $set: { ...row.vehicle, memberId: row.memberId, updatedAt: now }, $setOnInsert: { createdAt: now },
+        }, { upsert: true });
         await this.members.updateOne({ _id: row.memberId }, {
           $addToSet: { serviceTypes: 'driver' },
-          $set: { driverReview: { status: 'approved', reviewedAt: now, reviewedBy: String(request.userId) }, updatedAt: now },
+          $set: { vehicle: { type: row.vehicle.type, plate: row.vehicle.plate, license: row.vehicle.license }, driverReview: { status: 'approved', reviewedAt: now, reviewedBy: String(request.userId) }, updatedAt: now },
         });
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];

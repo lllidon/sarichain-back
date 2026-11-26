@@ -77,7 +77,6 @@ export class MarketplaceAccounts {
     const specialist = needsSpecialistReview(services);
     const vehicle = input.vehicle ?? member.vehicle;
     const credential = input.serviceCredential ?? member.serviceCredential;
-    if (wantsDriver && !vehicle) throw new BadRequestException('برای رانندگی مشخصات وسیله و گواهینامه را ثبت کنید.');
     if (specialist && !credential) throw new BadRequestException('برای نظارت یا کنترل کیفیت، مرجع مدرک را ثبت کنید.');
 
     const previousProducer = member.producerType;
@@ -96,7 +95,7 @@ export class MarketplaceAccounts {
     }
     if (wantsDriver) {
       member.vehicle = vehicle;
-      if (!member.driverReview || !previous.includes('driver') || vehicleChanged) member.driverReview = { status: 'pending' };
+      if (!member.driverReview || !previous.includes('driver') || vehicleChanged || !vehicle) member.driverReview = { status: 'pending' };
     } else {
       member.vehicle = undefined;
       member.driverReview = undefined;

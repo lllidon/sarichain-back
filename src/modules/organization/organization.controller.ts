@@ -86,7 +86,19 @@ export class OrganizationController {
   @UseGuards(AdminGuard)
   @Header('Cache-Control', 'private, no-store')
   async getTransportTariffs() {
-    return await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const stored = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    return {
+      intracityBaseKar: stored.intracityBaseKar,
+      intercityBaseKar: stored.intercityBaseKar,
+      interprovincialBaseKar: stored.interprovincialBaseKar,
+      perKmKar: stored.perKmKar,
+      perKgKar: stored.perKgKar,
+      perCubicMeterKar: stored.perCubicMeterKar,
+      hourlyMultiplier: stored.hourlyMultiplier,
+      dailyMultiplier: stored.dailyMultiplier,
+      multidayMultiplier: stored.multidayMultiplier,
+      specialMultiplier: stored.specialMultiplier,
+    };
   }
 
   @Patch('transport-tariffs')

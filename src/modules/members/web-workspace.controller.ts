@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, ForbiddenException, Get,
 import { InjectConnection } from '@nestjs/mongoose';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { IsDateString, IsIn, IsInt, IsMongoId, IsNumber, IsOptional, IsString, Length, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Connection, Types, isObjectIdOrHexString, mongo } from 'mongoose';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';

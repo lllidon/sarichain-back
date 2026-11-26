@@ -50,9 +50,13 @@ export class OrganizationController {
       orders.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
     ]);
+    const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     const enriched = await Promise.all(items.map(async order => ({
-      ...order, candidates: order.status === 'pending_review' || order.status === 'approved'
-        ? await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops) : [],
+      ...order,
+      ...(order.status === 'pending_review' || order.status === 'approved' ? {
+        quote: quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs as typeof defaultTransportTariffs),
+        candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops),
+      } : { candidates: [] }),
     })));
     return { items: enriched, total, page, limit };
   }

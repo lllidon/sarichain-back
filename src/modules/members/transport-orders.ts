@@ -57,7 +57,7 @@ export const defaultTransportTariffs = {
 };
 
 function normalize(value: string) {
-  return value.trim().toLocaleLowerCase('fa-IR').replace(/\s+/g, ' ');
+  return value.trim().toLocaleLowerCase('fa-IR').replace(/^(?:استان|شهرستان|شهر)\s+/, '').replace(/\s+/g, ' ');
 }
 
 export function classifyTransportRoute(stops: TransportStopDto[]) {

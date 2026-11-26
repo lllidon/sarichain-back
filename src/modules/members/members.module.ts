@@ -3,6 +3,7 @@ import { WebCartController } from './web-cart.controller';
 import { Module } from '@nestjs/common';
 import { ProductsModule } from '../products/products.module';
 import { WebWorkspaceController } from './web-workspace.controller';
+import { WebTransportOrdersController } from './web-transport-orders.controller';
 import { WebDeliveryController, WebOrdersController } from './web-orders.controller';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
@@ -19,7 +20,7 @@ import { MembersService } from './members.service';
 
 @Module({
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController, MarketplaceAccountController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebCartController],
+  controllers: [MembersController, MarketplaceAccountController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController],
   providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration],
 })
 export class MembersModule {}

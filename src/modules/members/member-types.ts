@@ -15,5 +15,5 @@ export const memberTypes = {
 export const reviewStates = ['pending', 'approved', 'rejected'] as const;
 export const reviewTargets = ['sellerReview', 'driverReview', 'specialistReview'] as const;
 export type ReviewTarget = typeof reviewTargets[number];
-export const vehicleTypes = ['motorcycle', 'car', 'pickup', 'van', 'truck'] as const;
+export const vehicleTypes = ['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'] as const;
 export const needsSpecialistReview = (services: string[] = []) => services.some(type => type === 'supervisor' || type === 'quality');

@@ -12,6 +12,7 @@ import { LocationsModule } from '../locations/locations.module';
 import { OrganizationModule } from '../organization/organization.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { MarketplaceAccountController } from './marketplace-account.controller';
+import { AccountUpgradesController } from './account-upgrades.controller';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { MarketplaceMigration } from './marketplace-migration.service';
 import { memberModels } from './member.schemas';
@@ -20,7 +21,7 @@ import { MembersService } from './members.service';
 
 @Module({
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController, MarketplaceAccountController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController],
+  controllers: [MembersController, MarketplaceAccountController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController],
   providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration],
 })
 export class MembersModule {}

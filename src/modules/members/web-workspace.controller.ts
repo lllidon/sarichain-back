@@ -39,6 +39,7 @@ class VehicleProfileDto {
   @IsString() @Length(2, 100) model!: string;
   @IsInt() @Min(1300) @Max(1500) year!: number;
   @IsInt() @Min(1) @Max(100000) capacityKg!: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0.01) @Max(10000) capacityM3?: number;
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)
   @IsString() @Length(3, 40) plate!: string;
   @Transform(({ value }) => typeof value === 'string' ? value.trim() : value)

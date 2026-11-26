@@ -1,0 +1,90 @@
+import { BadRequestException, ConflictException, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Body, Header } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
+import { InjectConnection } from '@nestjs/mongoose';
+import { MarketplaceAccounts } from './marketplace-account.service';
+import { TransportOrderDto, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from './transport-orders';
+
+@ApiTags('web')
+@ApiBearerAuth()
+@Controller('web/transport-orders')
+export class WebTransportOrdersController {
+  constructor(private readonly accounts: MarketplaceAccounts, @InjectConnection() private readonly connection: Connection) {}
+
+  private get orders() {
+    return this.connection.db!.collection('transport_orders');
+  }
+
+  @Get()
+  @Header('Cache-Control', 'private, no-store')
+  async list(@Headers('authorization') authorization: string | undefined) {
+    const member = await this.accounts.requireMember(authorization);
+    const own = await this.orders.find({ memberId: member._id })
+      .sort({ createdAt: -1, _id: -1 }).limit(30).toArray();
+    const jobs = member.serviceTypes?.includes('driver') && member.driverReview?.status === 'approved'
+      ? await this.orders.find({ status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } },
+        { projection: { memberId: 0, specialCarrierIds: 0, matchedCarrierIds: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
+      : [];
+    return {
+      items: [
+        ...own.map(order => ({ ...order, kind: 'own' })),
+        ...jobs.map(order => ({ ...order, kind: 'job', special: (order.specialCarrierIds ?? []).some((id: Types.ObjectId) => id.equals(member._id)) })),
+      ],
+      total: own.length + jobs.length,
+    };
+  }
+
+  @Post()
+  @Header('Cache-Control', 'private, no-store')
+  async create(@Headers('authorization') authorization: string | undefined, @Body() input: TransportOrderDto) {
+    const member = await this.accounts.requireMember(authorization);
+    const pickups = input.stops.filter(stop => stop.kind === 'pickup');
+    const dropoffs = input.stops.filter(stop => stop.kind === 'dropoff');
+    if (!pickups.length || !dropoffs.length) throw new BadRequestException('حداقل یک مبدأ و یک مقصد لازم است.');
+    if (new Date(input.deadline).getTime() <= Date.now()) throw new BadRequestException('مهلت تحویل باید در آینده باشد.');
+    const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const quote = quoteTransportOrder(input.stops, input.weightKg, input.volumeM3, input.urgency, tariffs as typeof defaultTransportTariffs);
+    const now = new Date();
+    await this.orders.createIndex({ memberId: 1, createdAt: -1 }, { name: 'transport_customer_orders' });
+    await this.orders.createIndex({ status: 1, matchedCarrierIds: 1, assignedCarrierId: 1 }, { name: 'transport_carrier_feed' });
+    const { insertedId } = await this.orders.insertOne({
+      memberId: member._id,
+      customer: { fullName: member.fullName, phone: member.phone, organization: member.organization },
+      stops: input.stops,
+      goodsType: input.goodsType.trim(),
+      weightKg: input.weightKg,
+      volumeM3: input.volumeM3,
+      urgency: input.urgency,
+      deadline: new Date(input.deadline),
+      description: input.description?.trim() ?? '',
+      quote,
+      status: 'pending_review',
+      matchedCarrierIds: [],
+      specialCarrierIds: [],
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { id: insertedId, status: 'pending_review', quote };
+  }
+
+  @Patch(':id/accept')
+  @Header('Cache-Control', 'private, no-store')
+  async accept(@Headers('authorization') authorization: string | undefined, @Param('id') id: string) {
+    const member = await this.accounts.requireMember(authorization);
+    if (!isObjectIdOrHexString(id)) throw new NotFoundException();
+    if (!member.serviceTypes?.includes('driver') || member.driverReview?.status !== 'approved') {
+      throw new BadRequestException('حساب راننده شما هنوز تأیید نشده است.');
+    }
+    const order = await this.orders.findOne({ _id: new Types.ObjectId(id), status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } });
+    if (!order) throw new ConflictException('این سفارش دیگر در دسترس نیست یا به همکار دیگری واگذار شده است.');
+    const special = (order.specialCarrierIds ?? []).some((carrierId: Types.ObjectId) => carrierId.equals(member._id));
+    const acceptedRateKar = special ? order.quote.specialKar : order.quote.standardKar;
+    const result = await this.orders.findOneAndUpdate(
+      { _id: order._id, status: 'approved', assignedCarrierId: { $exists: false }, matchedCarrierIds: member._id },
+      { $set: { status: 'assigned', assignedCarrierId: member._id, acceptedRateKar, acceptedAt: new Date(), updatedAt: new Date() } },
+      { returnDocument: 'after' },
+    );
+    if (!result) throw new ConflictException('این سفارش هم‌زمان به همکار دیگری واگذار شد.');
+    return { id: result._id, status: result.status, acceptedRateKar };
+  }
+}

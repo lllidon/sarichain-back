@@ -8,7 +8,7 @@ import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { Branch, BranchOrder, Profile } from './organization.schemas';
-import { TransportTariffDto, defaultTransportTariffs, findEligibleTransportCarriers } from '../members/transport-orders';
+import { TransportTariffDto, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
 
 enum SettingsList {
   Branches = 'branches',
@@ -76,7 +76,9 @@ export class OrganizationController {
     if (special.some(value => !eligible.has(value))) throw new BadRequestException('راننده ویژه باید از میان همکاران واجد شرایط انتخاب شود.');
     const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
-    await orders.updateOne({ _id: order._id }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, reviewedAt: new Date(), updatedAt: new Date() } });
+    const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const quote = quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs as typeof defaultTransportTariffs);
+    await orders.updateOne({ _id: order._id }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
   }
 

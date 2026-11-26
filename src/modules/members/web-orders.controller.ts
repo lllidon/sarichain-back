@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { Model } from 'mongoose';
 import { PriceRange, Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
+import { CartService } from '../cart/cart.service';
 import { producerOffers } from '../catalog/producer-offers';
 import { deliveryMethods, deliveryOptions, deliverySlots, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
@@ -26,6 +27,7 @@ class DeliveryDto {
 }
 
 class WebOrderDto {
+  @IsOptional() @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) cartRevision?: number;
   @ApiProperty() @IsUUID('4') requestId!: string;
   @ApiProperty({ type: [OrderLineDto] })
   @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ArrayUnique((item: OrderLineDto) => [item?.productId, item?.unitId ?? 'unit', item?.offerId].join(':'))
@@ -49,6 +51,7 @@ export class WebDeliveryController {
 export class WebOrdersController {
   constructor(
     private readonly accounts: MarketplaceAccounts,
+    private readonly cart: CartService,
     @InjectModel(Product.name) private readonly products: Model<Product>,
   ) {}
 
@@ -74,16 +77,20 @@ export class WebOrdersController {
     }));
     const requestedDelivery = input.delivery && { method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot };
     const signature = JSON.stringify(requestedDelivery ? { items: request, delivery: requestedDelivery } : request);
-    const id = createHash('sha256').update(member.id + ':' + input.requestId).digest('hex');
+    const fromCart = input.cartRevision != null;
+    const orderKey = fromCart ? 'cart:' + input.cartRevision : input.requestId;
+    const id = createHash('sha256').update(member.id + ':' + orderKey).digest('hex');
     const orders = this.products.db.db!.collection<{
       _id: string; signature: string; total: number; currency: string; price?: PriceRange; subtotal?: PriceRange; delivery?: ReturnType<typeof resolveDelivery>;
     }>('web_orders');
     const existing = await orders.findOne({ _id: id });
     if (existing) {
       if (existing.signature !== signature) throw new ConflictException('این شناسه درخواست قبلاً استفاده شده است.');
+      if (fromCart) await this.cart.clear(member._id, input.cartRevision);
       return { id, total: existing.total, currency: existing.currency, price: existing.price, subtotal: existing.subtotal, delivery: existing.delivery };
     }
 
+    const checkout = fromCart ? await this.cart.checkout(member._id, input.cartRevision!, request) : null;
     const records = await this.products.find({
       _id: { $in: request.map(item => item.productId) }, isActive: true,
     }).select('name saleUnit saleUnits maxOrderQuantity kind masterId').lean();
@@ -109,6 +116,10 @@ export class WebOrdersController {
       const availableOffers = offers.get(productId) ?? [];
       const offer = offerId ? availableOffers.find(item => item.id === offerId) : availableOffers.find(item => item.stock >= 1);
       if (!offer) throw new BadRequestException('عرضهٔ فروشنده در دسترس نیست.');
+      const quoted = checkout?.find(line => line.productId === productId && line.offerId === offerId && line.unitId === (unitId ?? 'unit'));
+      if (checkout && (!quoted || quoted.price !== Math.round(offer.price * 1_000_000) * unitsPerPack / 1_000_000)) {
+        throw new ConflictException('قیمت عرضه تغییر کرده است. سبد خرید را دوباره بررسی کنید.');
+      }
       const key = [productId, unitId ?? 'unit', offer.id].join(':');
       if (lines.has(key)) throw new BadRequestException('واحد تکراری برای محصول ارسال شده است.');
       lines.add(key);
@@ -153,6 +164,7 @@ export class WebOrdersController {
       memberId: member._id, signature, items, total, currency, price, subtotal, ...(delivery && { delivery }), status: 'pending', createdAt: new Date(),
     } }, { upsert: true, returnDocument: 'after' });
     if (!saved || saved.signature !== signature) throw new ConflictException('این شناسه درخواست قبلاً استفاده شده است.');
+    if (fromCart) await this.cart.clear(member._id, input.cartRevision);
     return { id, total: saved.total, currency: saved.currency, price: saved.price, subtotal: saved.subtotal, delivery: saved.delivery };
   }
 }

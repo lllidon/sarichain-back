@@ -54,7 +54,7 @@ export class WebCatalogController {
     function withOffers<T extends { _id: unknown }>(product: T) {
       const available = offers.get(String(product._id)) ?? [];
       const selected = available.find(offer => offer.stock >= 1) ?? available[0];
-      return { ...product, offers: available, price: selected ? { min: selected.price, max: selected.price } : null };
+      return { ...product, offers: available.map(({ sellerId, ...offer }) => offer), price: selected ? { min: selected.price, max: selected.price } : null };
     }
     const grouped = new Map<string, ReturnType<typeof withOffers<(typeof variants)[number]>>[]>();
     for (const variant of variants) {

@@ -32,7 +32,7 @@ export async function producerOffers(db: NonNullable<Connection['db']>, productI
     seen.add(key);
     const offers = grouped.get(productId) ?? [];
     offers.push({
-      id: String(row._id), name: producer.organization || producer.fullName, city: producer.city,
+      id: String(row._id), sellerId: String(row.memberId), name: producer.organization || producer.fullName, city: producer.city,
       price: row.offer.price, stock: row.offer.stock, unit: row.offer.unit, harvestDate: row.offer.harvestDate,
     });
     grouped.set(productId, offers);
@@ -43,6 +43,7 @@ export async function producerOffers(db: NonNullable<Connection['db']>, productI
 
 interface PublicOffer {
   id: string;
+  sellerId: string;
   name: string;
   city?: string;
   price: number;

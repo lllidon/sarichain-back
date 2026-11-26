@@ -104,15 +104,25 @@ export async function findEligibleTransportCarriers(db: import('mongodb').Db, we
   }, { projection: { memberId: 1, type: 1, model: 1, capacityKg: 1, plate: 1 } }).toArray();
   const routeText = normalize(stops.map(stop => stop.city + ' ' + stop.province).join(' '));
   const memberMap = new Map(members.map(member => [String(member._id), member]));
-  return vehicles.flatMap(vehicle => {
+  const candidates = new Map<string, {
+    memberId: string; fullName: string; phone?: string; city?: string;
+    vehicleType: string; model: string; capacityKg: number;
+  }>();
+  for (const vehicle of vehicles) {
     const member = memberMap.get(String(vehicle.memberId));
-    if (!member) return [];
+    if (!member) continue;
     const area = typeof member.serviceArea === 'string' ? normalize(member.serviceArea) : '';
-    if (area && !routeText.includes(area) && !area.split(/[،,؛;\s]+/).filter(Boolean).some(part => routeText.includes(part))) return [];
-    return [{
-      memberId: String(member._id), fullName: member.fullName || member.organization || 'همکار حمل',
+    const areaTokens = area.split(/[،,؛;\\s]+/).filter(part => part.length > 2 && !['استان', 'شهرستان', 'شهر'].includes(part));
+    const nationwide = /کل کشور|سراسری|ایران/.test(area);
+    if (area && !nationwide && !routeText.includes(area) && areaTokens.length && !areaTokens.some(part => routeText.includes(part))) continue;
+    const memberId = String(member._id);
+    const candidate = {
+      memberId, fullName: member.fullName || member.organization || 'همکار حمل',
       phone: member.phone, city: member.city, vehicleType: vehicle.type, model: vehicle.model,
       capacityKg: vehicle.capacityKg,
-    }];
-  });
+    };
+    const previous = candidates.get(memberId);
+    if (!previous || candidate.capacityKg < previous.capacityKg) candidates.set(memberId, candidate);
+  }
+  return [...candidates.values()];
 }

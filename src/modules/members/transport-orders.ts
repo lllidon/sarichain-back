@@ -130,13 +130,13 @@ export async function quoteTransportOrder(stops: TransportStopDto[], weightKg: n
     routingPending: !hasRoadDistance,
   };
 }
-export async function findEligibleTransportCarriers(db: import('mongodb').Db, weightKg: number, volumeM3: number, stops: TransportStopDto[]) {
+export async function findEligibleTransportCarriers(db: import('mongodb').Db, weightKg: number, volumeM3: number, stops: TransportStopDto[], densityKgPerM3 = 250) {
   const members = await db.collection('members').find({
     serviceTypes: 'driver', 'driverReview.status': 'approved', isActive: { $ne: false },
   }, { projection: { fullName: 1, phone: 1, organization: 1, city: 1, province: 1, serviceArea: 1 } }).toArray();
   if (!members.length) return [];
   const vehicles = await db.collection('member_vehicles').find({
-    memberId: { $in: members.map(member => member._id) }, capacityKg: { $gte: weightKg },
+    memberId: { $in: members.map(member => member._id) }, capacityKg: { $gte: Math.max(weightKg, volumeM3 * densityKgPerM3) },
     $or: [{ capacityM3: { $gte: volumeM3 } }, { capacityM3: { $exists: false } }],
   }, { projection: { memberId: 1, type: 1, model: 1, capacityKg: 1, capacityM3: 1, plate: 1 } }).toArray();
   const routeText = normalize(stops.map(stop => stop.city + ' ' + stop.province).join(' '));

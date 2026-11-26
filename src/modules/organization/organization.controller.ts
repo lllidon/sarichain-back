@@ -69,7 +69,7 @@ export class OrganizationController {
       await orders.updateOne({ _id: order._id }, { $set: { status: 'rejected', reviewedAt: new Date(), updatedAt: new Date() }, $unset: { matchedCarrierIds: '', specialCarrierIds: '' } });
       return { id, status: 'rejected' };
     }
-    const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.stops);
+    const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops);
     if (!candidates.length) throw new BadRequestException('برای این سفارش همکار راننده واجد شرایط پیدا نشد.');
     const eligible = new Set(candidates.map(candidate => candidate.memberId));
     const special = (input.specialCarrierIds ?? []).map(value => value.toLowerCase());

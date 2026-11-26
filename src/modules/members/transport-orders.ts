@@ -94,19 +94,20 @@ export function quoteTransportOrder(stops: TransportStopDto[], weightKg: number,
   return { category, distanceKm: Math.round(distanceKm * 10) / 10, standardKar, specialKar, currency: 'KAR' as const };
 }
 
-export async function findEligibleTransportCarriers(db: import('mongodb').Db, weightKg: number, stops: TransportStopDto[]) {
+export async function findEligibleTransportCarriers(db: import('mongodb').Db, weightKg: number, volumeM3: number, stops: TransportStopDto[]) {
   const members = await db.collection('members').find({
     serviceTypes: 'driver', 'driverReview.status': 'approved', isActive: { $ne: false },
   }, { projection: { fullName: 1, phone: 1, organization: 1, city: 1, province: 1, serviceArea: 1 } }).toArray();
   if (!members.length) return [];
   const vehicles = await db.collection('member_vehicles').find({
     memberId: { $in: members.map(member => member._id) }, capacityKg: { $gte: weightKg },
-  }, { projection: { memberId: 1, type: 1, model: 1, capacityKg: 1, plate: 1 } }).toArray();
+    $or: [{ capacityM3: { $gte: volumeM3 } }, { capacityM3: { $exists: false } }],
+  }, { projection: { memberId: 1, type: 1, model: 1, capacityKg: 1, capacityM3: 1, plate: 1 } }).toArray();
   const routeText = normalize(stops.map(stop => stop.city + ' ' + stop.province).join(' '));
   const memberMap = new Map(members.map(member => [String(member._id), member]));
   const candidates = new Map<string, {
     memberId: string; fullName: string; phone?: string; city?: string;
-    vehicleType: string; model: string; capacityKg: number;
+    vehicleType: string; model: string; capacityKg: number; capacityM3?: number;
   }>();
   for (const vehicle of vehicles) {
     const member = memberMap.get(String(vehicle.memberId));
@@ -119,7 +120,7 @@ export async function findEligibleTransportCarriers(db: import('mongodb').Db, we
     const candidate = {
       memberId, fullName: member.fullName || member.organization || 'همکار حمل',
       phone: member.phone, city: member.city, vehicleType: vehicle.type, model: vehicle.model,
-      capacityKg: vehicle.capacityKg,
+      capacityKg: vehicle.capacityKg, ...(vehicle.capacityM3 != null && { capacityM3: vehicle.capacityM3 }),
     };
     const previous = candidates.get(memberId);
     if (!previous || candidate.capacityKg < previous.capacityKg) candidates.set(memberId, candidate);

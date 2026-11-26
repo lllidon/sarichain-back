@@ -52,7 +52,7 @@ export class OrganizationController {
     ]);
     const enriched = await Promise.all(items.map(async order => ({
       ...order, candidates: order.status === 'pending_review' || order.status === 'approved'
-        ? await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.stops) : [],
+        ? await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops) : [],
     })));
     return { items: enriched, total, page, limit };
   }

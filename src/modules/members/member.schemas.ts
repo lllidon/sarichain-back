@@ -31,6 +31,7 @@ export class MarketplaceMember extends MemberProfile {
   @Prop({ trim: true, maxlength: 120 }) serviceCredential?: string;
   @Prop({ type: SchemaFactory.createForClass(Vehicle) }) vehicle?: Vehicle;
   @Prop({ type: ReviewSchema }) sellerReview?: RoleReview;
+  @Prop({ type: [String], default: [] }) allowedProductCategoryIds!: string[];
   @Prop({ type: ReviewSchema }) driverReview?: RoleReview;
   @Prop({ type: ReviewSchema }) specialistReview?: RoleReview;
 }

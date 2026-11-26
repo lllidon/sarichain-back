@@ -8,7 +8,7 @@ import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { Branch, BranchOrder, Profile } from './organization.schemas';
-import { TransportTariffDto, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
+import { TransportTariffDto, TransportTariffRecord, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
 
 enum SettingsList {
   Branches = 'branches',
@@ -50,11 +50,11 @@ export class OrganizationController {
       orders.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
     ]);
-    const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     const enriched = await Promise.all(items.map(async order => ({
       ...order,
       ...(order.status === 'pending_review' || order.status === 'approved' ? {
-        quote: quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs as typeof defaultTransportTariffs),
+        quote: quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs),
         candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops),
       } : { candidates: [] }),
     })));

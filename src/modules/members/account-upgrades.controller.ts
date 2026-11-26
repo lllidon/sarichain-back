@@ -1,8 +1,9 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Post, Query, Req, ServiceUnavailableException, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
+import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from './marketplace-account.service';
@@ -25,6 +26,27 @@ export class AccountUpgradesController {
   private get requests() { return this.connection.db!.collection('account_upgrade_requests'); }
   private get members() { return this.connection.db!.collection('members'); }
 
+  private encryptionKey() {
+    const value = process.env.ACCOUNT_UPGRADE_ENCRYPTION_KEY || '';
+    if (!/^[a-f0-9]{64}$/i.test(value)) {
+      throw new ServiceUnavailableException('کلید رمزنگاری مدارک ارتقای حساب روی سرور تنظیم نشده است.');
+    }
+    return Buffer.from(value, 'hex');
+  }
+
+  private encryptDocument(data: Buffer) {
+    const iv = randomBytes(12);
+    const cipher = createCipheriv('aes-256-gcm', this.encryptionKey(), iv);
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()]);
+    return { data: encrypted.toString('base64'), iv: iv.toString('base64'), authTag: cipher.getAuthTag().toString('base64') };
+  }
+
+  private decryptDocument(document: { data: string; iv: string; authTag: string }) {
+    const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey(), Buffer.from(document.iv, 'base64'));
+    decipher.setAuthTag(Buffer.from(document.authTag, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(document.data, 'base64')), decipher.final()]);
+  }
+
   @Post('web/account-upgrades')
   @ApiBearerAuth()
   @UseInterceptors(FileFieldsInterceptor(uploadFields, { limits: { fileSize: 2 * 1024 * 1024, files: 4 } }))
@@ -46,7 +68,7 @@ export class AccountUpgradesController {
       if (!file) continue;
       if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype) ||
         !file.buffer || file.buffer.length > 2 * 1024 * 1024) throw new BadRequestException('نوع یا حجم یکی از مدارک معتبر نیست.');
-      documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, data: file.buffer.toString('base64') });
+      documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, ...this.encryptDocument(file.buffer) });
     }
     let vehicle: Record<string, unknown> | undefined;
     let producerType: string | undefined;
@@ -127,7 +149,7 @@ export class AccountUpgradesController {
     const rows = await this.requests.find(filter).sort({ createdAt: -1 }).limit(200).toArray();
     return { items: rows.map(row => ({ ...row, documents: (row.documents || []).map((doc: any) => ({
       type: doc.type, fileName: doc.fileName, mimeType: doc.mimeType,
-      dataUrl: 'data:' + doc.mimeType + ';base64,' + String(doc.data || ''),
+      dataUrl: 'data:' + doc.mimeType + ';base64,' + this.decryptDocument(doc).toString('base64'),
     })) })) };
   }
 

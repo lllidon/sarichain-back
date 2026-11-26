@@ -42,7 +42,23 @@ export class TransportTariffDto {
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(1) @Max(5) specialMultiplier!: number;
 }
 
-export const defaultTransportTariffs = {
+export interface TransportTariffRecord {
+  _id: string;
+  intracityBaseKar: number;
+  intercityBaseKar: number;
+  interprovincialBaseKar: number;
+  perKmKar: number;
+  perKgKar: number;
+  perCubicMeterKar: number;
+  hourlyMultiplier: number;
+  dailyMultiplier: number;
+  multidayMultiplier: number;
+  specialMultiplier: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export const defaultTransportTariffs: TransportTariffRecord = {
   _id: 'default',
   intracityBaseKar: 2,
   intercityBaseKar: 2,
@@ -76,7 +92,7 @@ function haversine(a: TransportStopDto, b: TransportStopDto) {
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 }
 
-export function quoteTransportOrder(stops: TransportStopDto[], weightKg: number, volumeM3: number, urgency: string, tariffs: typeof defaultTransportTariffs) {
+export function quoteTransportOrder(stops: TransportStopDto[], weightKg: number, volumeM3: number, urgency: string, tariffs: TransportTariffRecord) {
   const category = classifyTransportRoute(stops);
   const distanceKm = stops.slice(1).reduce((total, stop, index) => total + haversine(stops[index], stop), 0);
   const base = category === 'intracity' ? tariffs.intracityBaseKar

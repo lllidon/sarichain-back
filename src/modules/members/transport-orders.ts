@@ -4,23 +4,16 @@ import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOp
 export const transportUrgencies = ['hourly', 'daily', 'multiday'] as const;
 export const transportCategories = ['intracity', 'intercity', 'interprovincial'] as const;
 
+const trimTransportText = ({ value }: { value: unknown }) => typeof value === 'string' ? value.trim() : value;
+
 export class TransportStopDto {
   @IsIn(['pickup', 'dropoff']) kind!: 'pickup' | 'dropoff';
-  @TransformText() label!: string;
-  @TransformText() province!: string;
-  @TransformText() city!: string;
-  @TransformText() address!: string;
+  @Transform(trimTransportText) @IsString() @Length(1, 100) label!: string;
+  @Transform(trimTransportText) @IsString() @Length(1, 100) province!: string;
+  @Transform(trimTransportText) @IsString() @Length(1, 100) city!: string;
+  @Transform(trimTransportText) @IsString() @Length(1, 240) address!: string;
   @Type(() => Number) @IsNumber() @Min(-90) @Max(90) latitude!: number;
   @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude!: number;
-}
-
-function TransformText() {
-  return function (target: object, propertyKey: string) {
-    // Keep validation decorators local and avoid silently coercing non-text payloads.
-    IsString()(target, propertyKey);
-    Length(1, propertyKey === 'address' ? 240 : 100)(target, propertyKey);
-    Transform(({ value }) => typeof value === 'string' ? value.trim() : value)(target, propertyKey);
-  };
 }
 
 export class TransportOrderDto {

@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Body, Header, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Body, Header } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
 import { InjectConnection } from '@nestjs/mongoose';
@@ -41,7 +41,6 @@ export class WebTransportOrdersController {
   @Header('Cache-Control', 'private, no-store')
   async create(@Headers('authorization') authorization: string | undefined, @Body() input: TransportOrderDto) {
     const member = await this.accounts.requireMember(authorization);
-    if (!member.customerType) throw new ForbiddenException('برای ثبت سفارش حمل، نوع مشتری را در پروفایل تکمیل کنید.');
     const pickups = input.stops.filter(stop => stop.kind === 'pickup');
     const dropoffs = input.stops.filter(stop => stop.kind === 'dropoff');
     if (!pickups.length || !dropoffs.length) throw new BadRequestException('حداقل یک مبدأ و یک مقصد لازم است.');

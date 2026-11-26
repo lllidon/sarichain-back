@@ -37,7 +37,38 @@ export class OrganizationController {
   @UseGuards(AdminGuard)
   @Header('Cache-Control', 'private, no-store')
   async listTransportVehicles(@Query() { page, limit, search }: CatalogQueryDto) {
-    const escaped = search.trim().replace(/[.*+?^${}()|[\\]\\]/g, '\\  @Get('orders')');
+    const escaped = [...(search ?? '').trim()].map(char => '.^$*+?()[]{}|\\'.includes(char) ? '\\' + char : char).join('');
+    const pipeline: Record<string, unknown>[] = [
+      { $lookup: { from: 'members', localField: 'memberId', foreignField: '_id', as: 'member' } },
+      { $unwind: { path: '$member', preserveNullAndEmptyArrays: true } },
+    ];
+    if (escaped) {
+      const pattern = new RegExp(escaped, 'i');
+      pipeline.push({ $match: { $or: [
+        { model: pattern }, { plate: pattern }, { license: pattern },
+        { 'member.fullName': pattern }, { 'member.phone': pattern }, { 'member.organization': pattern },
+      ] } });
+    }
+    pipeline.push({ $facet: {
+      items: [
+        { $sort: { updatedAt: -1, _id: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        { $project: {
+          type: 1, className: 1, model: 1, year: 1, capacityKg: 1, plate: 1,
+          license: 1, licenseClass: 1, bodyType: 1, insuranceExpiry: 1,
+          technicalInspectionExpiry: 1, description: 1, createdAt: 1, updatedAt: 1, memberId: 1,
+          member: { _id: '$member._id', fullName: '$member.fullName', phone: '$member.phone',
+            organization: '$member.organization', city: '$member.city', serviceTypes: '$member.serviceTypes',
+            isActive: '$member.isActive' },
+        } },
+      ],
+      total: [{ $count: 'value' }],
+    } });
+    const [result] = await this.connection.db!.collection('member_vehicles').aggregate(pipeline).toArray();
+    return { items: result?.items ?? [], total: result?.total?.[0]?.value ?? 0, page, limit };
+  }
+  @Get('orders')');
     const pipeline: Record<string, unknown>[] = [
       { $lookup: { from: 'members', localField: 'memberId', foreignField: '_id', as: 'member' } },
       { $unwind: { path: '$member', preserveNullAndEmptyArrays: true } },

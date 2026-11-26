@@ -116,7 +116,9 @@ export class OrganizationController {
     return this.getTransportTariffs();
   }
   private async readZoneTariffs(): Promise<TransportZoneTariffRecord> {
-    return await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs').findOne({ _id: 'default' }) ?? defaultTransportZoneTariffs;
+    const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
+    await collection.updateOne({ _id: 'default' }, { $setOnInsert: defaultTransportZoneTariffs }, { upsert: true });
+    return (await collection.findOne({ _id: 'default' })) ?? defaultTransportZoneTariffs;
   }
 
   @Get('transport-zone-tariffs')

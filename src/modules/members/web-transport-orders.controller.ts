@@ -23,12 +23,12 @@ export class WebTransportOrdersController {
       .sort({ createdAt: -1, _id: -1 }).limit(30).toArray();
     const jobs = member.serviceTypes?.includes('driver') && member.driverReview?.status === 'approved'
       ? await this.orders.find({ status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } },
-        { projection: { memberId: 0, specialCarrierIds: 0, matchedCarrierIds: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
+        { projection: { memberId: 0, customer: 0, matchedCarrierIds: 0 } }).sort({ createdAt: -1 }).limit(30).toArray()
       : [];
     return {
       items: [
         ...own.map(order => ({ ...order, kind: 'own' })),
-        ...jobs.map(order => ({ ...order, kind: 'job', special: (order.specialCarrierIds ?? []).some((id: Types.ObjectId) => id.equals(member._id)) })),
+        ...jobs.map(({ specialCarrierIds, ...order }) => ({ ...order, kind: 'job', special: (specialCarrierIds ?? []).some((id: Types.ObjectId) => id.equals(member._id)) })),
       ],
       total: own.length + jobs.length,
     };

@@ -3,7 +3,7 @@ import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Connection, Types, isObjectIdOrHexString } from 'mongoose';
 import { InjectConnection } from '@nestjs/mongoose';
 import { MarketplaceAccounts } from './marketplace-account.service';
-import { TransportOrderDto, defaultTransportTariffs, quoteTransportOrder } from './transport-orders';
+import { TransportOrderDto, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from './transport-orders';
 
 @ApiTags('web')
 @ApiBearerAuth()
@@ -81,6 +81,10 @@ export class WebTransportOrdersController {
     }
     const order = await this.orders.findOne({ _id: new Types.ObjectId(id), status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } });
     if (!order) throw new ConflictException('این سفارش دیگر در دسترس نیست یا به همکار دیگری واگذار شده است.');
+    const stillEligible = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops);
+    if (!stillEligible.some(candidate => candidate.memberId === String(member._id))) {
+      throw new ConflictException('ظرفیت یا محدوده خدمت وسیله نقلیه شما دیگر با این سفارش مطابقت ندارد.');
+    }
     const special = (order.specialCarrierIds ?? []).some((carrierId: Types.ObjectId) => carrierId.equals(member._id));
     const acceptedRateKar = special ? order.quote.specialKar : order.quote.standardKar;
     const result = await this.orders.findOneAndUpdate(

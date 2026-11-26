@@ -179,6 +179,42 @@ export class WebWorkspaceController {
     return new StreamableFile(entry.photo.value(), { type: entry.photoType });
   }
 
+  @Post('products/offers/import')
+  @Header('Cache-Control', 'private, no-store')
+  async importOffers(@Headers('authorization') authorization: string | undefined,
+    @Body() input: { rows?: Array<{ id?: string; price?: number; stock?: number }> }) {
+    const member = await this.accounts.requireMember(authorization);
+    if (!member.producerType || member.sellerReview?.status !== 'approved') {
+      throw new ForbiddenException('دسترسی عرضه محصول برای این حساب تأیید نشده است.');
+    }
+    if (!Array.isArray(input.rows) || !input.rows.length || input.rows.length > 1000) {
+      throw new BadRequestException('فایل باید بین ۱ تا ۱۰۰۰ ردیف داشته باشد.');
+    }
+    const seen = new Set<string>();
+    const results: Array<{ id: string; success: boolean; message?: string }> = [];
+    for (const row of input.rows) {
+      const id = typeof row.id === 'string' && isObjectIdOrHexString(row.id) ? new Types.ObjectId(row.id) : null;
+      if (!id || seen.has(String(id))) {
+        results.push({ id: row.id ?? '', success: false, message: 'شناسه پیشنهاد فروش نامعتبر یا تکراری است.' });
+        continue;
+      }
+      seen.add(String(id));
+      if (typeof row.price !== 'number' || !Number.isFinite(row.price) || row.price < 0.0001 || row.price > 1_000_000 ||
+          typeof row.stock !== 'number' || !Number.isFinite(row.stock) || row.stock < 0 || row.stock > 1_000_000_000) {
+        results.push({ id: String(id), success: false, message: 'قیمت یا موجودی معتبر نیست.' });
+        continue;
+      }
+      const updated = await this.entries.updateOne(
+        { _id: id, section: Section.Products, memberId: member._id },
+        { $set: { 'offer.price': row.price, 'offer.stock': row.stock, updatedAt: new Date() } },
+      );
+      results.push(updated.matchedCount
+        ? { id: String(id), success: true }
+        : { id: String(id), success: false, message: 'پیشنهاد فروش متعلق به این حساب نیست یا وجود ندارد.' });
+    }
+    return { total: input.rows.length, updated: results.filter(row => row.success).length, results };
+  }
+
   @Post('products/offers')
   async createOffer(@Headers('authorization') authorization: string | undefined, @Body() input: ProductOfferDto) {
     const member = await this.accounts.requireMember(authorization);

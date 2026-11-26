@@ -83,6 +83,7 @@ export class OrganizationController {
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
     const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     const quote = await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs());
+    if (quote.routingPending) throw new BadRequestException('مسافت جاده‌ای در دسترس نیست؛ تا اتصال سرویس مسیریابی، تأیید و انتشار سفارش ممکن نیست.');
     const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
     if (!approved.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };

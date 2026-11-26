@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Header, NotFoundException, Param, ParseEnumPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { ArrayMaxSize, IsArray, IsIn, IsMongoId, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsIn, IsMongoId, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
 import { Connection, Types, isObjectIdOrHexString, Model } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { AllowClient, type AccessRequest } from '../auth/access';
@@ -17,7 +17,7 @@ enum SettingsList {
 
 class TransportOrderReviewDto {
   @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
-  @IsOptional() @IsArray() @ArrayMaxSize(2) @IsMongoId({ each: true }) specialCarrierIds?: string[];
+  @IsOptional() @IsArray() @ArrayMaxSize(2) @ArrayUnique() @IsMongoId({ each: true }) specialCarrierIds?: string[];
 }
 
 class SettingsInput {

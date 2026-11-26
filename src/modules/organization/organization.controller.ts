@@ -1,20 +1,21 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Header, NotFoundException, Param, ParseEnumPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { Connection, isObjectIdOrHexString, Model } from 'mongoose';
+import { ArrayMaxSize, IsArray, IsIn, IsMongoId, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { Connection, Types, isObjectIdOrHexString, Model } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { Branch, BranchOrder, Profile } from './organization.schemas';
+import { TransportTariffDto, defaultTransportTariffs, findEligibleTransportCarriers } from '../members/transport-orders';
 
 enum SettingsList {
   Branches = 'branches',
   Profiles = 'profiles',
 }
 
-class SettingsInput {
+class TransportOrderReviewDto {\n  @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';\n  @IsOptional() @IsArray() @ArrayMaxSize(2) @IsMongoId({ each: true }) specialCarrierIds?: string[];\n}\nclass SettingsInput {
   @IsOptional() @IsString() @MinLength(1) @MaxLength(140) name?: string;
   @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,39}$/i) code?: string;
   @IsOptional() @IsString() @MaxLength(600) description?: string;
@@ -33,6 +34,61 @@ export class OrganizationController {
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
+  @Get('transport-orders')
+  @UseGuards(AdminGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async listTransportOrders(@Query() { page, limit, search }: CatalogQueryDto) {
+    const escaped = [...(search ?? '').trim()].map(char => '.^$*+?()[]{}|\\'.includes(char) ? '\\' + char : char).join('');
+    const filter = escaped ? { $or: [{ goodsType: new RegExp(escaped, 'i') }, { 'customer.fullName': new RegExp(escaped, 'i') }, { 'customer.phone': new RegExp(escaped, 'i') }] } : {};
+    const orders = this.connection.db!.collection('transport_orders');
+    const [items, total] = await Promise.all([
+      orders.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
+      orders.countDocuments(filter),
+    ]);
+    const enriched = await Promise.all(items.map(async order => ({
+      ...order, candidates: order.status === 'pending_review' || order.status === 'approved'
+        ? await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.stops) : [],
+    })));
+    return { items: enriched, total, page, limit };
+  }
+
+  @Patch('transport-orders/:id')
+  @UseGuards(AdminGuard)
+  async reviewTransportOrder(@Param('id') id: string, @Body() input: TransportOrderReviewDto) {
+    if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه سفارش معتبر نیست.');
+    const orders = this.connection.db!.collection('transport_orders');
+    const order = await orders.findOne({ _id: new Types.ObjectId(id) });
+    if (!order) throw new NotFoundException('سفارش حمل پیدا نشد.');
+    if (order.status !== 'pending_review' && order.status !== 'approved') throw new ConflictException('وضعیت این سفارش قابل بررسی مجدد نیست.');
+    if (input.status === 'rejected') {
+      await orders.updateOne({ _id: order._id }, { $set: { status: 'rejected', reviewedAt: new Date(), updatedAt: new Date() }, $unset: { matchedCarrierIds: '', specialCarrierIds: '' } });
+      return { id, status: 'rejected' };
+    }
+    const candidates = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.stops);
+    if (!candidates.length) throw new BadRequestException('برای این سفارش همکار راننده واجد شرایط پیدا نشد.');
+    const eligible = new Set(candidates.map(candidate => candidate.memberId));
+    const special = (input.specialCarrierIds ?? []).map(value => value.toLowerCase());
+    if (special.some(value => !eligible.has(value))) throw new BadRequestException('راننده ویژه باید از میان همکاران واجد شرایط انتخاب شود.');
+    const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
+    const specialCarrierIds = special.map(value => new Types.ObjectId(value));
+    await orders.updateOne({ _id: order._id }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, reviewedAt: new Date(), updatedAt: new Date() } });
+    return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
+  }
+
+  @Get('transport-tariffs')
+  @UseGuards(AdminGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async getTransportTariffs() {
+    return await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+  }
+
+  @Patch('transport-tariffs')
+  @UseGuards(AdminGuard)
+  async saveTransportTariffs(@Body() input: TransportTariffDto) {
+    const values = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+    await this.connection.db!.collection('transport_tariffs').updateOne({ _id: 'default' }, { $set: { ...values, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
+    return this.getTransportTariffs();
+  }
   @Get('transport-vehicles')
   @UseGuards(AdminGuard)
   @Header('Cache-Control', 'private, no-store')

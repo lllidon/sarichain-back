@@ -109,10 +109,17 @@ export class WebWorkspaceController {
     const member = await this.accounts.requireMember(authorization);
     const now = new Date();
     await this.vehicles.createIndex({ memberId: 1 }, { unique: true, name: 'uniq_member_vehicle' });
+    const previous = await this.vehicles.findOne({ memberId: member._id });
+    const changed = !previous || ['type', 'model', 'year', 'capacityKg', 'capacityM3', 'plate', 'license', 'licenseClass', 'bodyType', 'insuranceExpiry', 'technicalInspectionExpiry']
+      .some(key => (previous as Record<string, unknown>)[key] !== (input as unknown as Record<string, unknown>)[key]);
     await this.vehicles.updateOne(
       { memberId: member._id },
       { $set: { ...input, memberId: member._id, updatedAt: now }, $setOnInsert: { createdAt: now }, ...(input.capacityM3 === undefined ? { $unset: { capacityM3: '' } } : {}) },
       { upsert: true },
+    );
+    if (changed) await this.connection.db!.collection('members').updateOne(
+      { _id: member._id },
+      { $set: { vehicle: { type: input.type, plate: input.plate, license: input.license }, driverReview: { status: 'pending' }, updatedAt: now } },
     );
     const { _id, memberId, createdAt, updatedAt, ...vehicle } = (await this.vehicles.findOne({ memberId: member._id }))!;
     return { vehicle };

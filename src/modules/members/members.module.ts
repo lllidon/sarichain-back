@@ -1,5 +1,6 @@
 import { CartModule } from '../cart/cart.module';
 import { WebCartController } from './web-cart.controller';
+import { WebWeeklyBasketController } from './web-weekly-basket.controller';
 import { Module } from '@nestjs/common';
 import { ProductsModule } from '../products/products.module';
 import { WebWorkspaceController } from './web-workspace.controller';
@@ -21,7 +22,7 @@ import { MembersService } from './members.service';
 
 @Module({
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController, MarketplaceAccountController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController],
+  controllers: [MembersController, MarketplaceAccountController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController, WebWeeklyBasketController],
   providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration],
 })
 export class MembersModule {}

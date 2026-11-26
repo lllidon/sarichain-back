@@ -44,7 +44,10 @@ export class WebTransportOrdersController {
     const pickups = input.stops.filter(stop => stop.kind === 'pickup');
     const dropoffs = input.stops.filter(stop => stop.kind === 'dropoff');
     if (!pickups.length || !dropoffs.length) throw new BadRequestException('حداقل یک مبدأ و یک مقصد لازم است.');
-    if (new Date(input.deadline).getTime() <= Date.now()) throw new BadRequestException('مهلت تحویل باید در آینده باشد.');
+    const deadlineMs = new Date(input.deadline).getTime() - Date.now();
+    if (deadlineMs <= 0) throw new BadRequestException('مهلت تحویل باید در آینده باشد.');
+    const speedLimitMs: Record<string, number> = { normal: 5 * 86400000, special: 2 * 86400000, express: 86400000, urgent: 3 * 3600000 };
+    if (deadlineMs > speedLimitMs[input.urgency]) throw new BadRequestException('مهلت تحویل با سرعت انتخاب‌شده هم‌خوانی ندارد.');
     const tariffs = await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs').findOne({ _id: 'default' }) ?? defaultTransportZoneTariffs;
     const quote = await quoteTransportOrder(input.stops, input.weightKg, input.volumeM3, input.urgency, tariffs);
     const now = new Date();
@@ -80,7 +83,8 @@ export class WebTransportOrdersController {
     }
     const order = await this.orders.findOne({ _id: new Types.ObjectId(id), status: 'approved', matchedCarrierIds: member._id, assignedCarrierId: { $exists: false } });
     if (!order) throw new ConflictException('این سفارش دیگر در دسترس نیست یا به همکار دیگری واگذار شده است.');
-    const stillEligible = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops);
+    const tariff = await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs').findOne({ _id: 'default' }) ?? defaultTransportZoneTariffs;
+    const stillEligible = await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops, tariff.densityKgPerM3);
     if (!stillEligible.some(candidate => candidate.memberId === String(member._id))) {
       throw new ConflictException('ظرفیت یا محدوده خدمت وسیله نقلیه شما دیگر با این سفارش مطابقت ندارد.');
     }

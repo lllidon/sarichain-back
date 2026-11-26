@@ -81,8 +81,8 @@ export class OrganizationController {
     if (special.some(value => !eligible.has(value))) throw new BadRequestException('راننده ویژه باید از میان همکاران واجد شرایط انتخاب شود.');
     const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
-    const tariffs = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
-    const quote = quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs as typeof defaultTransportTariffs);
+    const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const quote = quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs);
     const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
     if (!approved.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
@@ -92,7 +92,7 @@ export class OrganizationController {
   @UseGuards(AdminGuard)
   @Header('Cache-Control', 'private, no-store')
   async getTransportTariffs() {
-    const stored = await this.connection.db!.collection('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
+    const stored = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     return {
       intracityBaseKar: stored.intracityBaseKar,
       intercityBaseKar: stored.intercityBaseKar,
@@ -111,7 +111,7 @@ export class OrganizationController {
   @UseGuards(AdminGuard)
   async saveTransportTariffs(@Body() input: TransportTariffDto) {
     const values = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
-    await this.connection.db!.collection('transport_tariffs').updateOne({ _id: 'default' }, { $set: { ...values, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
+    await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').updateOne({ _id: 'default' }, { $set: { ...values, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
     return this.getTransportTariffs();
   }
   @Get('transport-vehicles')

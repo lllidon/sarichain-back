@@ -30,7 +30,7 @@ export class WebTransportOrdersController {
         ...own.map(order => ({ ...order, kind: 'own' })),
         ...jobs.map(({ specialCarrierIds, ...order }) => ({ ...order, kind: 'job', special: (specialCarrierIds ?? []).some((id: Types.ObjectId) => id.equals(member._id)) })),
       ],
-      total: own.length + jobs.length,
+      total: own.length + jobs.length, page: 1, limit: Math.max(1, own.length + jobs.length),
     };
   }
 

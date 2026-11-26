@@ -1,8 +1,8 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, Header, NotFoundException, Param, ParseEnumPipe, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
+import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
-import { isObjectIdOrHexString, Model } from 'mongoose';
+import { Connection, isObjectIdOrHexString, Model } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
@@ -30,8 +30,44 @@ export class OrganizationController {
     @InjectModel(Branch.name) private readonly branches: Model<Branch>,
     @InjectModel(Profile.name) private readonly profiles: Model<Profile>,
     @InjectModel(BranchOrder.name) private readonly orders: Model<BranchOrder>,
+    @InjectConnection() private readonly connection: Connection,
   ) {}
 
+  @Get('transport-vehicles')
+  @UseGuards(AdminGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async listTransportVehicles(@Query() { page, limit, search }: CatalogQueryDto) {
+    const escaped = search.trim().replace(/[.*+?^${}()|[\\]\\]/g, '\\  @Get('orders')');
+    const pipeline: Record<string, unknown>[] = [
+      { $lookup: { from: 'members', localField: 'memberId', foreignField: '_id', as: 'member' } },
+      { $unwind: { path: '$member', preserveNullAndEmptyArrays: true } },
+    ];
+    if (escaped) {
+      const pattern = new RegExp(escaped, 'i');
+      pipeline.push({ $match: { $or: [
+        { model: pattern }, { plate: pattern }, { license: pattern },
+        { 'member.fullName': pattern }, { 'member.phone': pattern }, { 'member.organization': pattern },
+      ] } });
+    }
+    pipeline.push({ $facet: {
+      items: [
+        { $sort: { updatedAt: -1, _id: -1 } },
+        { $skip: (page - 1) * limit },
+        { $limit: limit },
+        { $project: {
+          type: 1, className: 1, model: 1, year: 1, capacityKg: 1, plate: 1,
+          license: 1, licenseClass: 1, bodyType: 1, insuranceExpiry: 1,
+          technicalInspectionExpiry: 1, description: 1, createdAt: 1, updatedAt: 1, memberId: 1,
+          member: { _id: '$member._id', fullName: '$member.fullName', phone: '$member.phone',
+            organization: '$member.organization', city: '$member.city', serviceTypes: '$member.serviceTypes',
+            isActive: '$member.isActive' },
+        } },
+      ],
+      total: [{ $count: 'value' }],
+    } });
+    const [result] = await this.connection.db!.collection('member_vehicles').aggregate(pipeline).toArray();
+    return { items: result?.items ?? [], total: result?.total?.[0]?.value ?? 0, page, limit };
+  }
   @Get('orders')
   @AllowClient()
   @Header('Cache-Control', 'private, no-store')

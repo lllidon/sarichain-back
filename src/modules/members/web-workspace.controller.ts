@@ -110,7 +110,7 @@ export class WebWorkspaceController {
     const now = new Date();
     await this.vehicles.createIndex({ memberId: 1 }, { unique: true, name: 'uniq_member_vehicle' });
     const previous = await this.vehicles.findOne({ memberId: member._id });
-    const changed = !previous || ['type', 'model', 'year', 'capacityKg', 'capacityM3', 'plate', 'license', 'licenseClass', 'bodyType', 'insuranceExpiry', 'technicalInspectionExpiry']
+    const changed = !previous || !member.vehicle || ['type', 'model', 'year', 'capacityKg', 'capacityM3', 'plate', 'license', 'licenseClass', 'bodyType', 'insuranceExpiry', 'technicalInspectionExpiry']
       .some(key => (previous as Record<string, unknown>)[key] !== (input as unknown as Record<string, unknown>)[key]);
     await this.vehicles.updateOne(
       { memberId: member._id },

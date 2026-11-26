@@ -8,7 +8,7 @@ import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { Branch, BranchOrder, Profile } from './organization.schemas';
-import { TransportTariffDto, TransportTariffRecord, defaultTransportTariffs, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
+import { TransportTariffDto, TransportTariffRecord, defaultTransportTariffs, TransportZoneTariffsDto, TransportZoneTariffRecord, defaultTransportZoneTariffs, zoneDefinitions, speedDefinitions, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
 
 enum SettingsList {
   Branches = 'branches',
@@ -54,7 +54,7 @@ export class OrganizationController {
     const enriched = await Promise.all(items.map(async order => ({
       ...order,
       ...(order.status === 'pending_review' || order.status === 'approved' ? {
-        quote: quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs),
+        quote: await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs()),
         candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops),
       } : { candidates: [] }),
     })));
@@ -82,7 +82,7 @@ export class OrganizationController {
     const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
     const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
-    const quote = quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, tariffs);
+    const quote = await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs());
     const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });
     if (!approved.matchedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است. دوباره بارگذاری کنید.');
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
@@ -114,6 +114,31 @@ export class OrganizationController {
     await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').updateOne({ _id: 'default' }, { $set: { ...values, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
     return this.getTransportTariffs();
   }
+  private async readZoneTariffs(): Promise<TransportZoneTariffRecord> {
+    return await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs').findOne({ _id: 'default' }) ?? defaultTransportZoneTariffs;
+  }
+
+  @Get('transport-zone-tariffs')
+  @UseGuards(AdminGuard)
+  @Header('Cache-Control', 'private, no-store')
+  async getTransportZoneTariffs() {
+    const stored = await this.readZoneTariffs();
+    return { ...stored, zones: zoneDefinitions, speeds: speedDefinitions };
+  }
+
+  @Patch('transport-zone-tariffs')
+  @UseGuards(AdminGuard)
+  async saveTransportZoneTariffs(@Body() input: TransportZoneTariffsDto) {
+    const now = new Date();
+    const record: TransportZoneTariffRecord = {
+      _id: 'default', rates: input.rates, densityKgPerM3: input.densityKgPerM3,
+      minimumKar: input.minimumKar, updatedAt: now,
+    };
+    await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs')
+      .updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });
+    return this.getTransportZoneTariffs();
+  }
+
   @Get('transport-vehicles')
   @UseGuards(AdminGuard)
   @Header('Cache-Control', 'private, no-store')

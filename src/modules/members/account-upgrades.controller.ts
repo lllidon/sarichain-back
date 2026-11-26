@@ -62,7 +62,12 @@ export class AccountUpgradesController {
     if (required.some(type => !docs.has(type))) throw new BadRequestException('تمام مدارک الزامی این درخواست را بارگذاری کنید.');
     if (input.kind === 'transport') {
       if (!input.vehicle || !['motorcycle', 'car', 'pickup', 'van', 'truckette', 'truck'].includes(input.vehicle.type) ||
-        input.vehicle.model.trim().length < 2 || input.vehicle.plate.trim().length < 3 || input.vehicle.license.trim().length < 3) {
+        typeof input.vehicle.model !== 'string' || input.vehicle.model.trim().length < 2 ||
+        typeof input.vehicle.plate !== 'string' || input.vehicle.plate.trim().length < 3 ||
+        typeof input.vehicle.license !== 'string' || input.vehicle.license.trim().length < 3 ||
+        !Number.isInteger(input.vehicle.year) || input.vehicle.year < 1300 || input.vehicle.year > 1500 ||
+        !Number.isInteger(input.vehicle.capacityKg) || input.vehicle.capacityKg < 1 || input.vehicle.capacityKg > 100000 ||
+        (input.vehicle.capacityM3 !== undefined && (!Number.isFinite(input.vehicle.capacityM3) || input.vehicle.capacityM3 <= 0))) {
         throw new BadRequestException('مشخصات وسیله نقلیه را کامل کنید.');
       }
     }
@@ -71,12 +76,20 @@ export class AccountUpgradesController {
       if (!Array.isArray(input.requestedCategoryIds) || input.requestedCategoryIds.length < 1 || input.requestedCategoryIds.length > 20 ||
         input.requestedCategoryIds.some(id => !isObjectIdOrHexString(id))) throw new BadRequestException('حداقل یک دسته‌بندی محصول انتخاب کنید.');
     }
+    await this.requests.createIndex({ memberId: 1, kind: 1 }, { unique: true, partialFilterExpression: { status: 'pending' }, name: 'uniq_pending_member_upgrade_kind' });
     const existing = await this.requests.findOne({ memberId: member._id, kind: input.kind, status: 'pending' });
     if (existing) throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
     const now = new Date();
+    let categoryLabels: string[] = [];
+    if (input.kind === 'producer') {
+      const ids = [...new Set(input.requestedCategoryIds)];
+      const categoryRows = await this.connection.db!.collection('categories').find({ _id: { $in: ids.map(id => new Types.ObjectId(id)) } }, { projection: { name: 1 } }).toArray();
+      if (categoryRows.length !== ids.length) throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
+      categoryLabels = categoryRows.map(row => String(row.name || ''));
+    }
     const record = {
       memberId: member._id, kind: input.kind, status: 'pending', documents: [...docs.values()],
-      ...(input.kind === 'producer' && { producerType: input.producerType, requestedCategoryIds: [...new Set(input.requestedCategoryIds)] }),
+      ...(input.kind === 'producer' && { producerType: input.producerType, requestedCategoryIds: [...new Set(input.requestedCategoryIds)], requestedCategoryLabels: categoryLabels }),
       ...(input.kind === 'transport' && { vehicle: input.vehicle }),
       memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
       createdAt: now, updatedAt: now,

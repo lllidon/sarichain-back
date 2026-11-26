@@ -6,6 +6,7 @@ import { verifyPassword } from '../auth/password';
 import { LocationsService } from '../locations/locations.service';
 import { MarketplaceLoginDto, MarketplaceProfileDto } from './marketplace.dto';
 import { MarketplaceMember } from './member.schemas';
+import { needsSpecialistReview } from './member-types';
 
 @Injectable()
 export class MarketplaceAccounts {

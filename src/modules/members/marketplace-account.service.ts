@@ -49,6 +49,7 @@ export class MarketplaceAccounts {
       address: member.address, province: member.province, city: member.city,
       provinceCode: member.provinceCode, cityCode: member.cityCode, customerType: member.customerType,
       producerType: member.producerType, productionActivity: member.productionActivity,
+      allowedProductCategoryIds: member.allowedProductCategoryIds ?? [],
       serviceTypes: member.serviceTypes, serviceArea: member.serviceArea,
       serviceCredential: member.serviceCredential, vehicle: member.vehicle,
       sellerStatus: member.sellerReview?.status,
@@ -72,43 +73,27 @@ export class MarketplaceAccounts {
     const member = await this.requireMember(authorization);
     if (Object.values(input).some(value => value === null)) throw new BadRequestException('مقدار خالی نامعتبر است.');
     const previous = member.serviceTypes ?? [];
-    const services = input.serviceTypes ?? previous;
+    const services = previous;
     const wantsDriver = services.includes('driver');
     const specialist = needsSpecialistReview(services);
     const vehicle = input.vehicle ?? member.vehicle;
     const credential = input.serviceCredential ?? member.serviceCredential;
     if (specialist && !credential) throw new BadRequestException('برای نظارت یا کنترل کیفیت، مرجع مدرک را ثبت کنید.');
 
-    const previousProducer = member.producerType;
-    const producerType = input.producerType === undefined ? previousProducer : input.producerType || undefined;
+    const producerType = member.producerType;
     const vehicleChanged = input.vehicle !== undefined && (
       input.vehicle.type !== member.vehicle?.type || input.vehicle.plate !== member.vehicle?.plate || input.vehicle.license !== member.vehicle?.license
     );
     const changed = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
     delete changed.producerType;
+    delete changed.serviceTypes;
     delete changed.vehicle;
     delete changed.serviceCredential;
+    delete changed.productionActivity;
+    delete changed.serviceArea;
     member.set({ ...changed, ...await this.locations.memberPlacement(input, member), producerType });
-    if (!producerType) member.sellerReview = undefined;
-    else if (!member.sellerReview || producerType !== previousProducer || member.isModified('productionActivity')) {
-      member.sellerReview = { status: 'pending' };
-    }
-    if (wantsDriver) {
-      member.vehicle = vehicle;
-      if (!member.driverReview || !previous.includes('driver') || vehicleChanged || !vehicle) member.driverReview = { status: 'pending' };
-    } else {
-      member.vehicle = undefined;
-      member.driverReview = undefined;
-    }
-    if (specialist) {
-      const changedCredential = credential !== member.serviceCredential;
-      member.serviceCredential = credential;
-      const addedSpecialty = services.some(type => needsSpecialistReview([type]) && !previous.includes(type));
-      if (!member.specialistReview || changedCredential || addedSpecialty) member.specialistReview = { status: 'pending' };
-    } else {
-      member.serviceCredential = undefined;
-      member.specialistReview = undefined;
-    }
+    // Role and service capabilities can only be granted by an approved account-upgrade request.
+
     try {
       return this.view(await member.save());
     } catch (error) {

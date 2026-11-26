@@ -41,6 +41,15 @@ export class AccountUpgradesController {
     return { data: encrypted.toString('base64'), iv: iv.toString('base64'), authTag: cipher.getAuthTag().toString('base64') };
   }
 
+  private validDocument(file: { mimetype: string; buffer: Buffer }) {
+    const bytes = file.buffer;
+    if (file.mimetype === 'image/jpeg') return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+    if (file.mimetype === 'image/png') return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    if (file.mimetype === 'image/webp') return bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+    if (file.mimetype === 'application/pdf') return bytes.toString('ascii', 0, 5) === '%PDF-';
+    return false;
+  }
+
   private decryptDocument(document: { data: string; iv: string; authTag: string }) {
     const decipher = createDecipheriv('aes-256-gcm', this.encryptionKey(), Buffer.from(document.iv, 'base64'));
     decipher.setAuthTag(Buffer.from(document.authTag, 'base64'));
@@ -67,7 +76,7 @@ export class AccountUpgradesController {
       if (required.includes(type) && !file) throw new BadRequestException('تمام مدارک الزامی را بارگذاری کنید.');
       if (!file) continue;
       if (!['image/jpeg', 'image/png', 'image/webp', 'application/pdf'].includes(file.mimetype) ||
-        !file.buffer || file.buffer.length > 2 * 1024 * 1024) throw new BadRequestException('نوع یا حجم یکی از مدارک معتبر نیست.');
+        !file.buffer || file.buffer.length > 2 * 1024 * 1024 || !this.validDocument(file)) throw new BadRequestException('نوع یا حجم یکی از مدارک معتبر نیست.');
       documents.push({ type, fileName: file.originalname.slice(0, 120), mimeType: file.mimetype, ...this.encryptDocument(file.buffer) });
     }
     let vehicle: Record<string, unknown> | undefined;

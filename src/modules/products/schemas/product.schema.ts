@@ -55,6 +55,18 @@ export class PhysicalSpecifications {
   @Prop({ validate: positive })
   shippingWeightG?: number;
 
+  @Prop({ type: Boolean, default: false })
+  requiresRefrigeration?: boolean;
+
+  @Prop({ type: Number, min: -80, max: 80 })
+  temperatureMinC?: number;
+
+  @Prop({ type: Number, min: -80, max: 80 })
+  temperatureMaxC?: number;
+
+  @Prop({ type: Boolean, default: false })
+  fragile?: boolean;
+
   @Prop({ type: SchemaFactory.createForClass(ShippingDimensions) })
   shippingDimensions?: ShippingDimensions;
 }

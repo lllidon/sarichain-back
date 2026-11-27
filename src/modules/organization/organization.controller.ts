@@ -82,7 +82,6 @@ export class OrganizationController {
     if (special.some(value => !eligible.has(value))) throw new BadRequestException('راننده ویژه باید از میان همکاران واجد شرایط انتخاب شود.');
     const matchedCarrierIds = candidates.map(candidate => new Types.ObjectId(candidate.memberId));
     const specialCarrierIds = special.map(value => new Types.ObjectId(value));
-    const tariffs = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
     const quote = await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, zoneTariffs);
     if (quote.routingPending) throw new BadRequestException('مسافت جاده‌ای در دسترس نیست؛ تا اتصال سرویس مسیریابی، تأیید و انتشار سفارش ممکن نیست.');
     const approved = await orders.updateOne({ _id: order._id, status: { $in: ['pending_review', 'approved'] } }, { $set: { status: 'approved', matchedCarrierIds, specialCarrierIds, quote, reviewedAt: new Date(), updatedAt: new Date() } });

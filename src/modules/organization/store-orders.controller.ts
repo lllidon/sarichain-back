@@ -60,6 +60,50 @@ export class StoreOrdersController {
   constructor(@InjectConnection() private readonly connection: Connection) {}
   private get db() { return this.connection.db!; }
 
+
+  @Get('board-config')
+  async getBoardConfig() {
+    const stored = await this.db.collection<any>('storeOrderBoardSettings').findOne({ _id: 'default' });
+    return stored?.config ?? DEFAULT_BOARD_CONFIG;
+  }
+
+  @Put('board-config')
+  async saveBoardConfig(@Body() input: any) {
+    if (!input || !Array.isArray(input.columns) || input.columns.length < 1 || input.columns.length > 12) {
+      throw new BadRequestException('تعریف ستون‌های کانبان معتبر نیست.');
+    }
+    const seen = new Set<string>();
+    const columns = input.columns.map((column: any) => {
+      if (!column || typeof column.id !== 'string' || typeof column.title !== 'string' ||
+          !column.id.trim() || !column.title.trim() || column.title.length > 60 ||
+          !Array.isArray(column.statuses) || !column.statuses.length ||
+          !Array.isArray(column.actions) || column.actions.length > 10) {
+        throw new BadRequestException('مشخصات یکی از ستون‌ها معتبر نیست.');
+      }
+      const statuses = column.statuses.filter((status: any) => BOARD_STATUSES.includes(status));
+      if (statuses.length !== column.statuses.length || statuses.some((status: string) => seen.has(status))) {
+        throw new BadRequestException('هر وضعیت سفارش باید فقط در یک ستون قرار بگیرد.');
+      }
+      statuses.forEach((status: string) => seen.add(status));
+      const actions = column.actions.map((action: any) => {
+        if (!action || typeof action.id !== 'string' || typeof action.label !== 'string' ||
+            !action.id.trim() || !action.label.trim() || action.label.length > 40 ||
+            !['status', 'print'].includes(action.type) ||
+            (action.type === 'status' && !BOARD_STATUSES.includes(action.targetStatus))) {
+          throw new BadRequestException('یکی از دکمه‌های عملیاتی ستون معتبر نیست.');
+        }
+        return { id: action.id.slice(0, 40), label: action.label.trim(), type: action.type,
+          ...(action.type === 'status' ? { targetStatus: action.targetStatus } : {}) };
+      });
+      return { id: column.id.slice(0, 40), title: column.title.trim(),
+        statuses, color: ['slate','blue','amber','violet','green','rose'].includes(column.color) ? column.color : 'slate', actions };
+    });
+    const config = { columns };
+    await this.db.collection<any>('storeOrderBoardSettings').updateOne(
+      { _id: 'default' }, { $set: { config, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
+    return config;
+  }
+
   @Get()
   @Header('Cache-Control', 'private, no-store')
   async list(@Req() _request: AccessRequest, @Query() query: Record<string, unknown>) {

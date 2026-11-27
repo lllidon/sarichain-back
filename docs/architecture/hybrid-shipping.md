@@ -59,7 +59,7 @@ Defaults keep the hub disabled and refrigerated surcharges at zero until managem
 
 ## Operational rollout requirements
 
-1. Existing producer offers may not have a pickup location. Producers must assign a mapped orchard/warehouse location before those offers can be shipped using automatic quotes.
+1. Existing producer offers may not have a pickup location. The current migration path is to remove and recreate those offers with a mapped orchard/warehouse location; new offers require this location.
 2. Existing catalog products may not have physical specifications. Management must fill shipping weight or package dimensions; refrigeration and fragile flags should be reviewed.
 3. Management must configure the hub location, capacity and cold-chain capability before consolidation can be considered.
 4. Delivery dates are estimates, not capacity reservations. Same-day slots are filtered against Tehran local time. Driver availability, working hours, dispatch cutoffs, vehicle refrigeration certification and time-slot capacity must be connected before presenting these estimates as guaranteed commitments.

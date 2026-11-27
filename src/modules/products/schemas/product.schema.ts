@@ -11,11 +11,6 @@ const integer = {
   message: 'Use a safe integer.',
 };
 
-const positive = {
-  validator: (value: number) => Number.isFinite(value) && value > 0,
-  message: 'Use a positive finite number.',
-};
-
 @Schema({ _id: false, strict: 'throw' })
 export class PriceRange {
   @Prop({ required: true, min: 0, max: 1_000_000 })

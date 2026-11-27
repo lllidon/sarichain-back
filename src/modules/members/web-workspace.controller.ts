@@ -256,7 +256,7 @@ export class WebWorkspaceController {
       },
       createdAt: new Date(),
     });
-    await this.connection.db!.collection('inventoryMovements').insertOne({
+    await this.connection.db!.collection<any>('inventoryMovements').insertOne({
       _id: 'seller-stock-created:' + String(insertedId),
       productId: String(productId), sellerId: String(member._id), offerId: String(insertedId),
       quantity: input.stock, stockAfter: input.stock, movementType: 'seller_stock_created',

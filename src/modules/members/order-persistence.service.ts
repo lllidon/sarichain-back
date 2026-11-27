@@ -12,6 +12,7 @@ export interface OrderItemInput {
   unitsPerPack: number;
   price: { min: number; max: number };
   offerId: string;
+  sellerId?: string;
   sellerName?: string;
 }
 export interface OrderCreateInput {
@@ -43,7 +44,7 @@ export class OrderPersistenceService {
       this.db.collection('orders').createIndex({ orderNumber: 1 }, { unique: true, name: 'uq_orders_order_number' }),
       this.db.collection('orders').createIndex({ memberId: 1, createdAt: -1, _id: -1 }, { name: 'ix_orders_member_created' }),
       this.db.collection('orders').createIndex({ status: 1, createdAt: -1 }, { name: 'ix_orders_status_created' }),
-      this.db.collection('orders').createIndex({ 'source.requestId': 1, memberId: 1 }, { unique: true, name: 'uq_orders_request_member' }),
+      this.db.collection('orders').createIndex({ 'source.requestId': 1, memberId: 1 }, { unique: true, name: 'uq_orders_request_member', partialFilterExpression: { 'source.requestId': { $type: 'string' } } }),
       this.db.collection('orderItems').createIndex({ orderId: 1, lineNumber: 1 }, { unique: true, name: 'uq_order_items_line' }),
       this.db.collection('orderItems').createIndex({ productId: 1, createdAt: -1 }, { name: 'ix_order_items_product_created' }),
       this.db.collection('orderItems').createIndex({ sellerId: 1, createdAt: -1 }, { name: 'ix_order_items_seller_created', sparse: true }),
@@ -91,7 +92,7 @@ export class OrderPersistenceService {
         min: moneyToMinor(input.subtotal.min), max: moneyToMinor(input.subtotal.max),
       }, total: moneyToMinor(input.total), price: {
         min: moneyToMinor(input.price.min), max: moneyToMinor(input.price.max),
-      }, itemCount: input.items.length, source: input.source, signature: input.signature,
+      }, itemCount: input.items.length, source: input.source, signature: input.signature, ...(input.delivery && { delivery: input.delivery }),
       schemaVersion: 1, createdAt: existing?.createdAt ?? now, updatedAt: now,
     };
     await orders.updateOne({ _id: input.id }, { $setOnInsert: order }, { upsert: true });
@@ -105,7 +106,7 @@ export class OrderPersistenceService {
         const unitPriceMax = moneyToMinor(item.price.max);
         await itemCollection.replaceOne({ _id: input.id + ':' + (index + 1) }, { 
           _id: input.id + ':' + (index + 1), orderId: input.id, lineNumber: index + 1,
-          productId: item.productId, offerId: item.offerId, name: item.name,
+          productId: item.productId, offerId: item.offerId, sellerId: item.sellerId, name: item.name,
           quantity: item.quantity, baseQuantity: item.baseQuantity, unitId: item.unitId,
           unitName: item.unitName, unitsPerPack: item.unitsPerPack,
           unitPrice: { min: unitPriceMin, max: unitPriceMax },

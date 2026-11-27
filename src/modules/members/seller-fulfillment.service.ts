@@ -22,6 +22,7 @@ export class SellerFulfillmentService {
     const safePage = Math.max(1, Math.floor(page));
     const safeLimit = Math.min(50, Math.max(1, Math.floor(limit)));
     const orderItems = this.db.collection<any>('orderItems');
+    await orderItems.createIndex({ sellerId: 1, createdAt: -1, orderId: 1 }, { name: 'ix_seller_order_items_dashboard' });
     const lines = await orderItems.find({ sellerId }).sort({ createdAt: -1, orderId: 1, lineNumber: 1 }).toArray();
     const orderIds = [...new Set(lines.map(line => String(line.orderId)))];
     if (!orderIds.length) return { items: [], total: 0, page: safePage, limit: safeLimit, counts: { active: 0, pending: 0, accepted: 0, preparing: 0, ready: 0, handed_over: 0 } };

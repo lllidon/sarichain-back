@@ -29,6 +29,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     await Promise.all([
       this.lots.createIndex({ memberId: 1, createdAt: 1, _id: 1 }),
       this.lots.createIndex({ nextDecayAt: 1, status: 1 }),
+      this.lots.createIndex({ legacyMigrationKey: 1 }, { unique: true, sparse: true }),
       this.ledger.createIndex({ idempotencyKey: 1 }, { unique: true, sparse: true }),
       this.ledger.createIndex({ memberId: 1, createdAt: -1, _id: -1 }),
     ]);
@@ -85,6 +86,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('علت یا شناسه یکتای تراکنش معتبر نیست.');
     }
     const memberObjectId = new Types.ObjectId(memberId);
+    await this.ensureLegacyLot(memberObjectId);
     return this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
       if (existing) return { duplicate: true, transaction: existing };
@@ -113,6 +115,8 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('علت یا شناسه یکتای تراکنش معتبر نیست.');
     }
     const memberObjectId = new Types.ObjectId(memberId);
+    await this.ensureLegacyLot(memberObjectId);
+    await this.applyDueForMember(memberObjectId);
     return this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
       if (existing) return { duplicate: true, transaction: existing };
@@ -200,7 +204,34 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async ensureLegacyLot(memberId: Types.ObjectId) {
+    await this.inTransaction(async session => {
+      const member = await this.members.findOne({ _id: memberId }, { session });
+      if (!member) return;
+      const [sum, existing] = await Promise.all([
+        this.lots.aggregate([{ $match: { memberId } }, { $group: { _id: null, total: { $sum: '$remainingAmount' } } }], { session }).toArray(),
+        this.lots.findOne({ legacyMigrationKey: memberId.toString() }, { session }),
+      ]);
+      const balance = roundKarsha(Number(member.karshaBalance ?? 0));
+      const tracked = roundKarsha(Number(sum[0]?.total ?? 0));
+      const difference = roundKarsha(balance - tracked);
+      if (difference <= 1 / PRECISION) return;
+      const now = new Date();
+      if (existing) {
+        await this.lots.updateOne({ _id: existing._id }, { $inc: { originalAmount: difference, remainingAmount: difference },
+          $set: { updatedAt: now, status: 'active' } }, { session });
+      } else {
+        await this.lots.insertOne({ _id: new Types.ObjectId(), memberId, source: 'legacy_migration',
+          legacyMigrationKey: memberId.toString(), originalAmount: difference, remainingAmount: difference,
+          createdAt: now, anchorAt: now, decayPeriods: 0, nextDecayAt: addMonthiversary(now, 1),
+          status: 'active', createdBy: 'system' }, { session });
+      }
+    });
+  }
+
   async sweepDueLots() {
+    const members = await this.members.find({ karshaBalance: { $gt: 0 } }, { projection: { _id: 1 } }).toArray();
+    for (const member of members) await this.ensureLegacyLot(member._id);
     const dueMembers = await this.lots.distinct('memberId', { status: 'active', remainingAmount: { $gt: 0 }, nextDecayAt: { $lte: new Date() } });
     for (const memberId of dueMembers) await this.applyDueForMember(memberId);
     return { processedMembers: dueMembers.length };
@@ -208,6 +239,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
 
   async summary(memberId: string) {
     const id = new Types.ObjectId(memberId);
+    await this.ensureLegacyLot(id);
     await this.applyDueForMember(id);
     const [member, policy, lots, transactions] = await Promise.all([
       this.members.findOne({ _id: id }, { projection: { karshaBalance: 1, onboardingKarshaAwardedAt: 1 } }),
@@ -226,6 +258,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
 
   async listTransactions(memberId: string, page = 1, limit = 20) {
     const id = new Types.ObjectId(memberId);
+    await this.ensureLegacyLot(id);
     await this.applyDueForMember(id);
     const [items, total] = await Promise.all([
       this.ledger.find({ memberId: id }).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),

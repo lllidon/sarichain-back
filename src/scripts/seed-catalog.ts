@@ -209,8 +209,10 @@ async function main() {
       if (!sellerId) throw new Error('Missing producer for product SC-' + code);
       const stock = 80 + ((i * 37) % 420);
       const harvestDate = new Date().toISOString().slice(0, 10);
+      // Demo catalog source prices are stored in toman; seller offers are stored in Karsha.
+      const priceKarsha = Math.round((price / 100_000) * 10_000) / 10_000;
       const offer = {
-        productId: product._id, price, stock, reservedStock: 0,
+        productId: product._id, price: priceKarsha, stock, reservedStock: 0,
         unit, harvestDate, description: description + '؛ بسته‌بندی ' + pack,
       };
       await workspace.updateOne(

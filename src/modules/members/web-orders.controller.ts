@@ -113,6 +113,12 @@ export class WebOrdersController {
       const requestedDelivery = input.delivery && {
         method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot,
         addressId: input.delivery.addressId,
+        ...(savedAddress && { addressSnapshot: {
+          id: savedAddress.id, title: savedAddress.title, recipientName: savedAddress.recipientName,
+          phone: savedAddress.phone, address: savedAddress.address, province: savedAddress.province,
+          city: savedAddress.city, postalCode: savedAddress.postalCode,
+          latitude: savedAddress.latitude, longitude: savedAddress.longitude,
+        } }),
         destination: savedAddress ? { latitude: savedAddress.latitude!, longitude: savedAddress.longitude! } : input.delivery.destination,
         quotedFee: input.delivery.quotedFee,
         quotedRouteMode: input.delivery.quotedRouteMode, quotedDistanceKm: input.delivery.quotedDistanceKm,

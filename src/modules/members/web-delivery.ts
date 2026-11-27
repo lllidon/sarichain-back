@@ -108,7 +108,8 @@ export async function quoteBasketDelivery(
     const baseQuantity = line.quantity * (unit?.quantity ?? 1);
     if (!Number.isSafeInteger(baseQuantity)) throw new BadRequestException('تعداد واحدهای قابل حمل بیش از حد مجاز است.');
     const sellerOffers = offers.get(line.productId.toLowerCase()) ?? [];
-    const offer = line.offerId ? sellerOffers.find(item => item.id === line.offerId) : sellerOffers.find(item => item.stock >= baseQuantity);
+    const offerId = line.offerId?.toLowerCase();
+    const offer = offerId ? sellerOffers.find(item => item.id === offerId) : sellerOffers.find(item => item.stock >= baseQuantity);
     if (!offer || offer.stock < baseQuantity) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
     if (!offer.pickupLocation || !Number.isFinite(offer.pickupLocation.latitude) || !Number.isFinite(offer.pickupLocation.longitude)) {
       throw new BadRequestException('برای یکی از عرضه‌کنندگان، موقعیت بارگیری روی نقشه ثبت نشده است.');

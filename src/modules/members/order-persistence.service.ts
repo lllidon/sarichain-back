@@ -228,8 +228,8 @@ export class OrderPersistenceService {
       })),
       counts: {
         current, completed: counts.completed || 0,
-        returned: counts.returned || counts.refunded || 0,
-        cancelled: counts.cancelled || counts.canceled || 0,
+        returned: (counts.returned || 0) + (counts.refunded || 0),
+        cancelled: (counts.cancelled || 0) + (counts.canceled || 0),
         total,
       },
       total, page, limit,

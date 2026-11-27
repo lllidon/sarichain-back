@@ -177,7 +177,7 @@ export class OrderPersistenceService {
     await this.ensureIndexes();
     const orders = this.db.collection<any>('orders');
     const filter: Record<string, any> = { memberId, status: { $ne: 'creating' } };
-    if (status === 'current') filter.status = { $in: ['pending', 'confirmed', 'awaiting_inventory', 'processing', 'shipped', 'in_transit', 'awaiting_delivery'] };
+    if (status === 'current') filter.status = { $nin: ['creating', 'completed', 'returned', 'refunded', 'cancelled', 'canceled'] };
     else if (status === 'completed') filter.status = 'completed';
     else if (status === 'returned') filter.status = { $in: ['returned', 'refunded'] };
     else if (status === 'cancelled') filter.status = { $in: ['cancelled', 'canceled'] };
@@ -216,8 +216,8 @@ export class OrderPersistenceService {
       result[row._id] = row.count;
       return result;
     }, {} as Record<string, number>);
-    const currentStatuses = ['pending', 'confirmed', 'awaiting_inventory', 'processing', 'shipped', 'in_transit', 'awaiting_delivery'];
-    const current = currentStatuses.reduce((sum, status) => sum + (counts[status] || 0), 0);
+    const terminal = new Set(['creating', 'completed', 'returned', 'refunded', 'cancelled', 'canceled']);
+    const current = Object.entries(counts).reduce((sum, [key, value]) => sum + (terminal.has(key) ? 0 : value), 0);
     return {
       items: headers.map(order => ({
         ...order, total: order.total / 1_000_000,

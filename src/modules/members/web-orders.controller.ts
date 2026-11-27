@@ -3,7 +3,7 @@ import { InjectConnection } from '@nestjs/mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsMongoId, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsDefined, IsInt, IsMongoId, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { createHash } from 'node:crypto';
 import { Connection, Model } from 'mongoose';
 import { PriceRange, Product } from '../products/schemas/product.schema';
@@ -31,7 +31,7 @@ class DeliveryDto {
   @ApiProperty() @IsString() @Matches(/^\\d{4}-\\d{2}-\\d{2}$/) dispatchDate!: string;
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
-  @ApiProperty({ type: DeliveryPointDto }) @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
+  @ApiProperty({ type: DeliveryPointDto }) @IsDefined() @IsDefined() @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
 }
 
 class DeliveryQuoteLineDto {

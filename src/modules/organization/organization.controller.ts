@@ -111,7 +111,7 @@ export class OrganizationController {
     const now = new Date();
     const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
     const current = await collection.findOne({ _id: 'default' });
-    const supplied = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+    const supplied = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<TransportZoneTariffRecord>;
     const record: TransportZoneTariffRecord = {
       ...defaultTransportZoneTariffs, ...(current ?? {}), ...supplied, _id: 'default', updatedAt: now,
     };

@@ -56,6 +56,11 @@ export class CatalogDemoService {
     const runId = 'food-market-demo-v2';
     if (await runs.findOne({ _id: runId })) return;
 
+    // Replace only records explicitly marked as demo data; leave real catalog records untouched.
+    await this.productModel.deleteMany({ slug: /^demo-/ });
+    await this.categoryModel.deleteMany({ slug: /^demo-/ });
+    await this.brandModel.deleteMany({ slug: /^demo-/ });
+
     const brandIds: Types.ObjectId[] = [];
     for (const [key, name, image] of demoBrands) {
       const slug = `demo-${key}`;

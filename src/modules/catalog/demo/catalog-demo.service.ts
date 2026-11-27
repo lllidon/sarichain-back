@@ -12,7 +12,7 @@ import { demoBrands, demoCategories, demoProducts, demoImageUrls } from './demo-
 
 function images(image: string) {
   const imageUrl = demoImageUrls[image] ?? demoImageUrls.apple;
-  return { imageUrl, thumbnailUrl: imageUrl };
+  return { imageUrl, thumbnailUrl: imageUrl.replace('w=1000', 'w=360').replace('q=85', 'q=75') };
 }
 
 type RecordIdentity = { _id: Types.ObjectId };

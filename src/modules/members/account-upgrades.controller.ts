@@ -143,6 +143,64 @@ export class AccountUpgradesController {
     }
   }
 
+  @Post('web/account-upgrades/producer-categories')
+  @ApiBearerAuth()
+  async requestProducerCategories(
+    @Headers('authorization') authorization: string | undefined,
+    @Body() body: { requestedCategoryIds?: unknown },
+  ) {
+    const member = await this.accounts.requireMember(authorization);
+    if (!member.producerType || member.sellerReview?.status !== 'approved') {
+      throw new BadRequestException('این امکان فقط برای حساب تولیدکننده تأییدشده فعال است.');
+    }
+    const raw = body.requestedCategoryIds;
+    const requestedCategoryIds = Array.isArray(raw)
+      ? [...new Set(raw.filter((id): id is string => typeof id === 'string'))]
+      : [];
+    if (!requestedCategoryIds.length || requestedCategoryIds.length > 20 ||
+      requestedCategoryIds.some(id => !isObjectIdOrHexString(id))) {
+      throw new BadRequestException('حداقل یک دسته‌بندی معتبر انتخاب کنید.');
+    }
+    const categoryRows = await this.connection.db!.collection('categories').find(
+      { _id: { $in: requestedCategoryIds.map(id => new Types.ObjectId(id)) } },
+      { projection: { name: 1 } },
+    ).toArray();
+    if (categoryRows.length !== requestedCategoryIds.length) {
+      throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
+    }
+    const currentCategoryIds = (member.allowedProductCategoryIds || []).map((id: Types.ObjectId | string) => String(id));
+    if (currentCategoryIds.length === requestedCategoryIds.length &&
+      currentCategoryIds.every((id: string) => requestedCategoryIds.includes(id))) {
+      throw new BadRequestException('دسته‌بندی‌های انتخاب‌شده با مجوز فعلی تفاوتی ندارند.');
+    }
+    const currentRows = currentCategoryIds.length
+      ? await this.connection.db!.collection('categories').find(
+        { _id: { $in: currentCategoryIds.map((id: string) => new Types.ObjectId(id)) } },
+        { projection: { name: 1 } },
+      ).toArray()
+      : [];
+    await this.requests.createIndex({ memberId: 1, kind: 1 }, {
+      unique: true, partialFilterExpression: { status: 'pending' },
+      name: 'uniq_pending_member_upgrade_kind',
+    });
+    const now = new Date();
+    try {
+      const result = await this.requests.insertOne({
+        memberId: member._id, kind: 'producer_categories', status: 'pending', documents: [],
+        currentCategoryIds, currentCategoryLabels: currentRows.map(row => String(row.name || '')),
+        requestedCategoryIds, requestedCategoryLabels: categoryRows.map(row => String(row.name || '')),
+        memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
+        createdAt: now, updatedAt: now,
+      });
+      return { id: result.insertedId, status: 'pending' };
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+        throw new BadRequestException('درخواست تغییر دسته‌بندی شما در انتظار بررسی است.');
+      }
+      throw error;
+    }
+  }
+
   @Get('web/account-upgrades')
   @ApiBearerAuth()
   async own(@Headers('authorization') authorization?: string) {
@@ -186,16 +244,22 @@ export class AccountUpgradesController {
           $set: { vehicle: { type: row.vehicle.type, plate: row.vehicle.plate, license: row.vehicle.license },
             driverReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId }, updatedAt: now },
         });
+      } else if (row.kind === 'producer_categories') {
+        const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
+        if (!categories.length) throw new BadRequestException('درخواست تغییر دسته‌بندی فاقد دسته‌بندی معتبر است.');
+        await this.members.updateOne({ _id: row.memberId, 'sellerReview.status': 'approved' }, {
+          $set: { allowedProductCategoryIds: categories.map((id: string) => new Types.ObjectId(id)), updatedAt: now },
+        });
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست تولیدکننده دسته‌بندی مجاز ندارد.');
         await this.members.updateOne({ _id: row.memberId }, {
           $set: { producerType: row.producerType, sellerReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId },
-            allowedProductCategoryIds: categories, updatedAt: now },
+            allowedProductCategoryIds: categories.map((id: string) => new Types.ObjectId(id)), updatedAt: now },
         });
       }
     }
-    if (input.status === 'approved') {
+    if (input.status === 'approved' && row.kind !== 'producer_categories') {
       // Award the one-time customer onboarding credit after the first document review approval.
       await this.karsha.credit(row.memberId.toString(), 1, {
         reason: 'هدیه تکمیل و تأیید مدارک حساب',

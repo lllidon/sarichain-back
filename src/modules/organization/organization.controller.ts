@@ -92,7 +92,9 @@ export class OrganizationController {
   private async readZoneTariffs(): Promise<TransportZoneTariffRecord> {
     const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
     await collection.updateOne({ _id: 'default' }, { $setOnInsert: defaultTransportZoneTariffs }, { upsert: true });
-    return (await collection.findOne({ _id: 'default' })) ?? defaultTransportZoneTariffs;
+    const stored = await collection.findOne({ _id: 'default' });
+    // Merge defaults so records created by the former 24-row tariff editor remain readable.
+    return { ...defaultTransportZoneTariffs, ...(stored ?? {}) };
   }
 
   @Get('transport-zone-tariffs')

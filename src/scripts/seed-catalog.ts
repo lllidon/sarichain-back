@@ -199,7 +199,7 @@ async function main() {
     // Rebuild only this seed's offers so reruns cannot leave orphaned product references.
     await workspace.deleteMany({ demoSeedKey: seedKey, section: 'products' });
 
-    // Create one live seller offer for every producer-product pair (200 offers).
+    // Create one live seller offer for every producer-product pair (400 offers).
     let offers = 0;
     for (let i = 0; i < demoProducts.length; i++) {
       const [code, name, , price, unit, description, pack, , producerIndex] = demoProducts[i];
@@ -229,8 +229,17 @@ async function main() {
     const approvedProducers = await members.countDocuments({
       demoSeedKey: seedKey, producerType: { $type: 'string', $ne: '' }, 'sellerReview.status': 'approved',
     });
-    if (seededProductIds.length !== 200 || publishedOffers !== 200 || approvedProducers !== 20) {
-      throw new Error(`Demo catalog incomplete: products=${seededProductIds.length}, priced offers=${publishedOffers}, approved producers=${approvedProducers}. Refusing to report a successful seed.`);
+    const sellersWithTwentyProducts = await workspace.aggregate([
+      { $match: { demoSeedKey: seedKey, section: 'products', 'offer.productId': { $in: seededProductIds } } },
+      { $group: { _id: '$memberId', productIds: { $addToSet: '$offer.productId' } } },
+      { $match: { $expr: { $gte: [{ $size: '$productIds' }, 20] } } },
+    ]).toArray();
+    const productsWithCatalogPrice = await products.countDocuments({
+      sku: /^SC-3\d{3}$/, kind: 'master', price: { $exists: true, $ne: null },
+    });
+    if (seededProductIds.length !== 400 || publishedOffers !== 400 || approvedProducers !== 20 ||
+        sellersWithTwentyProducts.length !== 20 || productsWithCatalogPrice !== 0) {
+      throw new Error(`Demo catalog incomplete: products=${seededProductIds.length}, seller offers=${publishedOffers}, approved producers=${approvedProducers}, sellers with 20+ offers=${sellersWithTwentyProducts.length}, catalog-priced products=${productsWithCatalogPrice}. Refusing to report a successful seed.`);
     }
 
     const counts = {

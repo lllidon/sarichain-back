@@ -137,7 +137,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       if (balanceBefore + 1 / PRECISION < amount) throw new BadRequestException('موجودی کارسا کافی نیست.');
       let lots = await this.lots.find({ memberId: memberObjectId, remainingAmount: { $gt: 0 } }, { session }).sort({ createdAt: 1, _id: 1 }).toArray();
       const lotBalance = roundKarsha(lots.reduce((sum, lot) => sum + Number(lot.remainingAmount || 0), 0));
-      if (lotBalance + 1 / PRECISION < balanceBefore) {
+      if (Math.abs(lotBalance - balanceBefore) > 1 / PRECISION) {
         throw new ConflictException('موجودی و سهمیه‌های دفتر کل هم‌خوان نیستند؛ ابتدا تطبیق کیف پول انجام دهید.');
       }
       let remaining = amount;
@@ -201,7 +201,9 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
         if (charge > 0) {
           const member = await this.members.findOne({ _id: memberId }, { session });
           if (!member) throw new NotFoundException('عضو پیدا نشد.');
-          const balanceAfter = Math.max(0, roundKarsha(Number(member.karshaBalance || 0) - charge));
+          const memberBalance = roundKarsha(Number(member.karshaBalance || 0));
+          if (memberBalance + 1 / PRECISION < charge) throw new ConflictException('موجودی کیف پول با سهمیه کارسا هم‌خوان نیست؛ کاهش ماهانه متوقف شد.');
+          const balanceAfter = Math.max(0, roundKarsha(memberBalance - charge));
           await this.members.updateOne({ _id: memberId }, { $set: { karshaBalance: balanceAfter, updatedAt: now } }, { session });
           const idempotencyKey = 'decay:' + lot._id.toString() + ':' + nextPeriods;
           await this.ledger.updateOne({ idempotencyKey }, { $setOnInsert: {
@@ -229,6 +231,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       const balance = roundKarsha(Number(member.karshaBalance ?? 0));
       const tracked = roundKarsha(Number(sum[0]?.total ?? 0));
       const difference = roundKarsha(balance - tracked);
+      if (difference < -1 / PRECISION) throw new ConflictException('مجموع سهمیه‌های کارسا از موجودی کیف پول بیشتر است؛ تطبیق مدیریتی لازم است.');
       if (difference <= 1 / PRECISION) return;
       const now = new Date();
       const lotId = existing?._id ?? new Types.ObjectId();

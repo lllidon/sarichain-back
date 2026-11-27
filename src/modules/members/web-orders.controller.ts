@@ -135,7 +135,7 @@ export class WebOrdersController {
       return {
         productId, quantity, baseQuantity, name: product.name, unitId: unitId ?? 'unit',
         unitName: unit?.name ?? offer.unit, unitsPerPack,
-        price: { min: offer.price, max: offer.price }, offerId: offer.id, sellerName: offer.name,
+        price: { min: offer.price, max: offer.price }, offerId: offer.id, sellerId: offer.sellerId, sellerName: offer.name,
       };
     });
     const delivery = requestedDelivery ? resolveDelivery(requestedDelivery) : undefined;

@@ -26,7 +26,7 @@ export class SellerFulfillmentService {
     const orderIds = [...new Set(lines.map(line => String(line.orderId)))];
     if (!orderIds.length) return { items: [], total: 0, page: safePage, limit: safeLimit, counts: { active: 0, pending: 0, accepted: 0, preparing: 0, ready: 0, handed_over: 0 } };
     const [orders, fulfillments] = await Promise.all([
-      this.db.collection<any>('orders').find({ _id: { $in: orderIds }, status: { $nin: ['creating', 'cancelled', 'canceled', 'returned', 'refunded'] } },
+      this.db.collection<any>('orders').find({ _id: { $in: orderIds }, status: { $nin: ['creating', 'completed', 'cancelled', 'canceled', 'returned', 'refunded'] } },
         { projection: { signature: 0 } }).sort({ createdAt: -1, _id: -1 }).toArray(),
       this.db.collection<any>('sellerOrderFulfillments').find({ sellerId, orderId: { $in: orderIds } }).toArray(),
     ]);
@@ -65,7 +65,7 @@ export class SellerFulfillmentService {
         updatedAt: fulfillment?.updatedAt ?? order.updatedAt, status: state, statusLabel: LABELS[state],
         nextStatus: NEXT[state], buyer: { name: buyer?.organization || buyer?.fullName || 'مشتری ساری‌چین', city: buyer?.city || address.city || '', province: buyer?.province || address.province || '' },
         items: linesByOrder.get(id) ?? [], itemCount: (linesByOrder.get(id) ?? []).length,
-        total: (linesByOrder.get(id) ?? []).reduce((sum, item) => sum + Number(item.subtotal || 0), 0),
+        total: Number(order.total || 0) / 1_000_000,
         delivery: { method: delivery.method, dispatchDate: delivery.dispatchDate, slot: delivery.slot,
           addressTitle: address.title, city: address.city, province: address.province, shippingStatus: shipping.status },
         allowedToPrepare: order.status === 'confirmed' || ['paid', 'confirmed'].includes(metaByOrder.get(id)?.payment?.status),

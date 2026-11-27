@@ -53,6 +53,15 @@ export class OrderPersistenceService {
     ]);
   }
 
+  async recordWorkflowLog(input: { orderId: string; stage: string; status: 'started' | 'succeeded' | 'failed'; actorId: Types.ObjectId | string; correlationId: string; details?: Record<string, unknown>; error?: string }) {
+    await this.db.collection('orderProcessingLogs').insertOne({
+      orderId: input.orderId, stage: input.stage, status: input.status,
+      actor: { id: input.actorId, type: 'member' }, correlationId: input.correlationId,
+      details: input.details ?? {}, ...(input.error && { error: input.error }),
+      occurredAt: new Date(), schemaVersion: 1,
+    });
+  }
+
   async findExisting(id: string, signature: string, memberId: Types.ObjectId) {
     const existing = await this.db.collection('orders').findOne({ _id: id });
     if (!existing) return null;
@@ -65,6 +74,7 @@ export class OrderPersistenceService {
 
   async create(input: OrderCreateInput) {
     await this.ensureIndexes();
+    await this.recordWorkflowLog({ orderId: input.id, stage: 'order.persistence.started', status: 'started', actorId: input.memberId, correlationId: input.source.requestId, details: { itemCount: input.items.length } });
     const orders = this.db.collection('orders');
     const existing = await orders.findOne({ _id: input.id });
     if (existing) {
@@ -131,6 +141,7 @@ export class OrderPersistenceService {
         { upsert: true },
       );
       await orders.updateOne({ _id: input.id, status: 'creating' }, { $set: { status: 'pending', updatedAt: new Date() } });
+      await this.recordWorkflowLog({ orderId: input.id, stage: 'order.persistence.completed', status: 'succeeded', actorId: input.memberId, correlationId: input.source.requestId, details: { orderNumber, itemCount: input.items.length } });
     }
     return this.summary(await orders.findOne({ _id: input.id }));
   }

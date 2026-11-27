@@ -31,6 +31,9 @@ class DeliveryDto {
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
   @ApiProperty({ type: DeliveryPointDto }) @IsDefined() @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
+  @ApiProperty() @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) quotedFee!: number;
+  @ApiProperty({ enum: ['direct', 'hub'] }) @IsIn(['direct', 'hub']) quotedRouteMode!: 'direct' | 'hub';
+  @ApiProperty() @IsNumber({ maxDecimalPlaces: 1 }) @Min(0) @Max(1000000) quotedDistanceKm!: number;
 }
 
 class DeliveryQuoteLineDto {
@@ -180,6 +183,13 @@ export class WebOrdersController {
       const shippingOptions = requestedDelivery
         ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination) : undefined;
       const delivery = requestedDelivery ? resolveDelivery(requestedDelivery, shippingOptions) : undefined;
+      if (delivery && input.delivery && (
+        Math.abs(delivery.fee - input.delivery.quotedFee) > 0.0001 ||
+        delivery.routeMode !== input.delivery.quotedRouteMode ||
+        Math.abs(delivery.distanceKm - input.delivery.quotedDistanceKm) > 0.11
+      )) {
+        throw new ConflictException('تعرفه یا مسیر حمل تغییر کرده است؛ گزینه‌های ارسال را دوباره بررسی کنید.');
+      }
       const currency = 'KAR';
       const sum = (bound: keyof PriceRange) => items.reduce((total, item) =>
         total + Math.round(item.price[bound] * 1_000_000) * item.baseQuantity, 0);

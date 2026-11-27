@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Query, Req, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Put, Query, Req, UseGuards } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
@@ -15,7 +15,36 @@ class StoreOrderUpdateDto {
   @IsOptional() @IsString() @MaxLength(80) trackingCode?: string;
   @IsOptional() @IsString() @MaxLength(2000) adminNote?: string;
 }
-const fromMinor = (value: any) => typeof value === 'number' ? value / 1_000_000 : 0;
+
+const BOARD_STATUSES = ['pending', 'confirmed', 'processing', 'shipped', 'completed', 'cancelled', 'returned'] as const;
+const DEFAULT_BOARD_CONFIG = {
+  columns: [
+    { id: 'pending', title: 'سفارش جدید', statuses: ['pending'], color: 'slate', actions: [
+      { id: 'confirm', label: 'تأیید سفارش', type: 'status', targetStatus: 'confirmed' },
+      { id: 'reject', label: 'رد سفارش', type: 'status', targetStatus: 'cancelled' },
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+    { id: 'confirmed', title: 'تأیید شده', statuses: ['confirmed'], color: 'blue', actions: [
+      { id: 'prepare', label: 'شروع آماده‌سازی', type: 'status', targetStatus: 'processing' },
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+    { id: 'processing', title: 'در حال آماده‌سازی', statuses: ['processing'], color: 'amber', actions: [
+      { id: 'ship', label: 'ثبت ارسال', type: 'status', targetStatus: 'shipped' },
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+    { id: 'shipped', title: 'ارسال شده', statuses: ['shipped'], color: 'violet', actions: [
+      { id: 'complete', label: 'تأیید تحویل', type: 'status', targetStatus: 'completed' },
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+    { id: 'completed', title: 'تحویل شده', statuses: ['completed'], color: 'green', actions: [
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+    { id: 'exceptions', title: 'لغو و مرجوعی', statuses: ['cancelled', 'returned'], color: 'rose', actions: [
+      { id: 'print', label: 'چاپ سفارش', type: 'print' },
+    ] },
+  ],
+};
+\nconst fromMinor = (value: any) => typeof value === 'number' ? value / 1_000_000 : 0;
 const toMinor = (value: number) => {
   const result = Math.round(value * 1_000_000);
   if (!Number.isSafeInteger(result)) throw new BadRequestException('مبلغ سفارش معتبر نیست.');

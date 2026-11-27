@@ -221,7 +221,7 @@ export class WebOrdersController {
       const price = { min: (min + shipping) / 1_000_000, max: (max + shipping) / 1_000_000 };
       const total = price.max;
       const saved = await this.orderPersistence.create({
-        id, memberId: member._id, signature, items, subtotal, price, total, currency: 'KAR',
+        id, memberId: member._id, customerPhone: member.phone, signature, items, subtotal, price, total, currency: 'KAR',
         ...(delivery && { delivery: delivery as unknown as Record<string, unknown> }),
         source: { channel: 'web', requestId: input.requestId, ...(fromCart && { cartRevision: input.cartRevision }) },
       });

@@ -30,6 +30,10 @@ class DimensionsDto {
 class PhysicalDto {
   @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) standardDensityKgM3?: number;
   @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) shippingWeightG?: number;
+  @IsOptional() @IsBoolean() requiresRefrigeration?: boolean;
+  @IsOptional() @IsNumber() @Min(-80) @Max(80) temperatureMinC?: number;
+  @IsOptional() @IsNumber() @Min(-80) @Max(80) temperatureMaxC?: number;
+  @IsOptional() @IsBoolean() fragile?: boolean;
   @IsOptional() @ValidateNested() @Type(() => DimensionsDto) shippingDimensions?: DimensionsDto;
 }
 

@@ -7,6 +7,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from './marketplace-account.service';
+import { KarshaLedgerService } from './karsha-ledger.service';
 
 const requestKinds = ['transport', 'producer'] as const;
 const documentKinds = ['nationalId', 'driverLicense', 'vehicleCard', 'productionProof'] as const;
@@ -20,6 +21,7 @@ const uploadFields = [
 export class AccountUpgradesController {
   constructor(
     private readonly accounts: MarketplaceAccounts,
+    private readonly karsha: KarshaLedgerService,
     @InjectConnection() private readonly connection: Connection,
   ) {}
 
@@ -195,10 +197,13 @@ export class AccountUpgradesController {
     }
     if (input.status === 'approved') {
       // Award the one-time customer onboarding credit after the first document review approval.
-      await this.members.updateOne(
-        { _id: row.memberId, onboardingKarshaAwardedAt: { $exists: false } },
-        { $inc: { karshaBalance: 1 }, $set: { onboardingKarshaAwardedAt: now, updatedAt: now } },
-      );
+      await this.karsha.credit(row.memberId.toString(), 1, {
+        reason: 'هدیه تکمیل و تأیید مدارک حساب',
+        actor: request.userId,
+        idempotencyKey: 'onboarding:' + row.memberId.toString(),
+        kind: 'onboarding',
+        markOnboarding: true,
+      });
     }
     await this.requests.updateOne({ _id: row._id, status: 'pending' }, {
       $set: { status: input.status, reviewNote: input.note?.trim() || '', reviewedAt: now, reviewedBy: request.userId, updatedAt: now },

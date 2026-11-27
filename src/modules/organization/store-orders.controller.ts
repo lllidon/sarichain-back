@@ -32,8 +32,13 @@ export class StoreOrdersController {
 
   @Get()
   @Header('Cache-Control', 'private, no-store')
-  async list(@Req() _request: AccessRequest, @Query('page') pageRaw = '1', @Query('limit') limitRaw = '20',
-    @Query('status') status = 'all', @Query('search') search = '') {
+  async list(@Req() _request: AccessRequest, @Query() query: Record<string, unknown>) {
+    // Read query values as raw strings. This keeps the list filter independent of
+    // enum/primitive query pipes configured elsewhere in the application.
+    const pageRaw = typeof query.page === 'string' ? query.page : '1';
+    const limitRaw = typeof query.limit === 'string' ? query.limit : '20';
+    const status = typeof query.status === 'string' ? query.status : 'all';
+    const search = typeof query.search === 'string' ? query.search : '';
     const page = Math.max(1, Math.min(10000, Number(pageRaw) || 1));
     const limit = Math.max(1, Math.min(100, Number(limitRaw) || 20));
     const validStatus = ['all', 'current', ...STATUSES] as string[];

@@ -88,6 +88,7 @@ export class StoreOrdersController {
       order.memberId ? this.db.collection<any>('members').findOne({ _id: order.memberId }, { projection: { fullName: 1, phone: 1, organization: 1, deliveryAddresses: 1 } }) : null,
     ]);
     return { ...order, customer: member ?? order.customer ?? null, total: fromMinor(order.total),
+      meta: meta ? { ...meta, shipping: meta.shipping ? { ...meta.shipping, fee: fromMinor(meta.shipping.fee) } : meta.shipping } : meta,
       subtotal: { min: fromMinor(order.subtotal?.min), max: fromMinor(order.subtotal?.max) },
       price: { min: fromMinor(order.price?.min), max: fromMinor(order.price?.max) },
       items: items.map(item => ({ ...item, unitPrice: { min: fromMinor(item.unitPrice?.min), max: fromMinor(item.unitPrice?.max) },
@@ -108,9 +109,8 @@ export class StoreOrdersController {
     if (input.adminNote !== undefined) set.adminNote = input.adminNote.trim();
     if (input.shippingFee !== undefined) {
       const fee = toMinor(input.shippingFee);
-      set['meta.shipping.fee'] = fee;
       const subtotal = Math.max(0, Number(order.subtotal?.max ?? 0));
-      set.total = toMinor(subtotal / 1_000_000 + input.shippingFee);
+      if (input.total === undefined) set.total = toMinor(subtotal / 1_000_000 + input.shippingFee);
       await this.db.collection<any>('orderMeta').updateOne({ _id: id }, {
         $set: { 'shipping.fee': fee, updatedAt: now }, $setOnInsert: { orderId: id, createdAt: now },
       }, { upsert: true });

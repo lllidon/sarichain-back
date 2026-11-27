@@ -257,7 +257,7 @@ export class WebWorkspaceController {
     }, { projection: { title: 1 } }) : null;
     if (input.locationId && !location) throw new BadRequestException('موقعیت انتخاب‌شده معتبر نیست.');
     const products = this.connection.db!.collection('products');
-    const fields = { name: 1, kind: 1, masterId: 1, saleUnit: 1, sku: 1, description: 1 };
+    const fields = { name: 1, kind: 1, masterId: 1, categoryId: 1, saleUnit: 1, sku: 1, description: 1 };
     const productId = new Types.ObjectId(input.productId);
     const product = await products.findOne({ _id: productId, isActive: true, kind: { $in: ['master', 'variant'] } },
       { projection: fields });

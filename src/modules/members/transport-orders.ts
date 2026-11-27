@@ -70,10 +70,10 @@ export const zoneDefinitions = [
   { id: 'zone-5', label: 'زون ۵', minKm: 500, maxKm: null },
 ] as const;
 export const speedDefinitions = [
-  { id: 'normal', label: 'عادی', target: 'زیر ۵ روز' },
-  { id: 'special', label: 'ویژه', target: 'زیر ۲ روز' },
-  { id: 'express', label: 'اکسپرس', target: 'همان روز' },
-  { id: 'urgent', label: 'فوری', target: 'زیر ۳ ساعت' },
+  { id: 'normal', label: 'اقتصادی', target: 'حدود ۵ روز' },
+  { id: 'special', label: 'عادی', target: 'حدود ۳ روز' },
+  { id: 'express', label: 'سریع', target: 'تا فردا' },
+  { id: 'urgent', label: 'فوری', target: 'همان روز، در صورت وجود بازه' },
 ] as const;
 export const defaultTransportZoneTariffs: TransportZoneTariffRecord = {
   _id: 'default', baseKar: 2, distanceWeight: 0.02, billableWeightWeight: 0.001,

@@ -114,7 +114,7 @@ export async function quoteBasketDelivery(
       fragile: Boolean(parent?.physical?.fragile || product.physical?.fragile),
     };
     const units = (product.saleUnits?.length ? product.saleUnits : parent?.saleUnits) ?? [];
-    const unit = line.unitId && line.unitId !== 'unit' ? units.find(item => item.code === line.unitId) : undefined;
+    const unit = line.unitId && line.unitId !== 'unit' ? units.find((item: { code: string; quantity: number }) => item.code === line.unitId) : undefined;
     if (line.unitId && line.unitId !== 'unit' && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');
     const baseQuantity = line.quantity * (unit?.quantity ?? 1);
     if (!Number.isSafeInteger(baseQuantity)) throw new BadRequestException('تعداد واحدهای قابل حمل بیش از حد مجاز است.');

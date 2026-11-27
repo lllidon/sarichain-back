@@ -27,7 +27,7 @@ class DeliveryPointDto {
 
 class DeliveryDto {
   @ApiProperty({ enum: deliveryMethods }) @IsIn(deliveryMethods) method!: string;
-  @ApiProperty() @IsString() @Matches(/^\\d{4}-\\d{2}-\\d{2}$/) dispatchDate!: string;
+  @ApiProperty() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) dispatchDate!: string;
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
   @ApiProperty({ type: DeliveryPointDto }) @IsDefined() @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;

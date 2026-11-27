@@ -96,6 +96,9 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       if (existing) return { duplicate: true, transaction: existing };
       const member = await this.members.findOne({ _id: memberObjectId }, { session });
       if (!member) throw new NotFoundException('عضو پیدا نشد.');
+      if (options.markOnboarding && member.onboardingKarshaAwardedAt) {
+        return { duplicate: true, alreadyAwarded: true, balance: Number(member.karshaBalance ?? 0) };
+      }
       const now = new Date();
       const lotId = new Types.ObjectId();
       const balance = roundKarsha(Number(member.karshaBalance ?? 0) + amount);

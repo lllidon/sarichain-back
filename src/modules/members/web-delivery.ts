@@ -22,6 +22,14 @@ const dateFormatter = new Intl.DateTimeFormat('en-CA', {
 
 export type BasketShippingLine = { productId: string; offerId?: string; quantity: number; unitId?: string };
 export type DeliveryPoint = { latitude: number; longitude: number };
+export type LegacyDeliveryOption = {
+  id: 'express' | 'standard' | 'economy';
+  label: string;
+  fee: number;
+  windows: Array<{ dispatchDate: string; deliveryDate: string; slots: Array<(typeof deliverySlots)[number]> }>;
+  slots: typeof deliverySlots;
+};
+
 export type BasketDeliveryQuote = {
   id: typeof deliveryMethods[number];
   label: string;
@@ -250,20 +258,46 @@ export async function quoteBasketDelivery(
 }
 
 
+export function deliveryOptions(now = new Date()): LegacyDeliveryOption[] {
+  const legacyPolicies = [
+    { id: 'express', label: 'ارسال سریع', lead: 1, fee: 0.45, env: 'WEB_DELIVERY_EXPRESS_FEE' },
+    { id: 'standard', label: 'ارسال عادی', lead: 2, fee: 0.3, env: 'WEB_DELIVERY_STANDARD_FEE' },
+    { id: 'economy', label: 'ارسال اقتصادی', lead: 4, fee: 0.15, env: 'WEB_DELIVERY_ECONOMY_FEE' },
+  ] as const;
+  const today = dateFormatter.format(now);
+  const start = new Date(today + 'T12:00:00Z');
+  return legacyPolicies.map(policy => {
+    const raw = process.env[policy.env]?.trim();
+    const configured = raw ? Number(raw) : NaN;
+    const fee = Number.isFinite(configured) && configured >= 0 && configured <= 1_000_000
+      ? Math.round(configured * 1_000_000) / 1_000_000 : policy.fee;
+    const windows = Array.from({ length: 7 }, (_, index) => ({
+      dispatchDate: dayAt(start, index + 1),
+      deliveryDate: dayAt(start, index + 1 + policy.lead),
+      slots: [...deliverySlots],
+    }));
+    return { id: policy.id, label: policy.label, fee, windows, slots: deliverySlots };
+  });
+}
+
 export function resolveDelivery(
-  input: { method: string; dispatchDate: string; slot: string; destination: DeliveryPoint },
-  options: BasketDeliveryQuote[],
+  input: { method: string; dispatchDate: string; slot: string; destination?: DeliveryPoint },
+  options: Array<BasketDeliveryQuote | LegacyDeliveryOption>,
 ) {
   const method = options.find(option => option.id === input.method);
   const slot = deliverySlots.find(option => option.id === input.slot);
   const window = method?.windows.find(option => option.dispatchDate === input.dispatchDate);
-  if (!method || !slot || !window || !window.slots.some(option => option.id === input.slot) || !Number.isFinite(method.fee) || method.fee < 0) {
+  const availableSlots = window?.slots ?? (method && 'slots' in method ? method.slots : deliverySlots);
+  if (!method || !slot || !window || !availableSlots.some(option => option.id === input.slot) ||
+      !Number.isFinite(method.fee) || method.fee < 0) {
     throw new BadRequestException('روش یا زمان ارسال معتبر نیست. گزینه‌های ارسال را دوباره بررسی کنید.');
   }
   return {
-    ...input, date: window.deliveryDate, label: method.label, slotLabel: slot.label,
-    fee: method.fee, routeMode: method.routeMode, routeLabel: method.routeLabel,
-    distanceKm: method.distanceKm, routingPending: method.routingPending,
-    refrigerated: method.refrigerated, fragile: method.fragile, breakdown: method.breakdown,
+    ...input, date: window.deliveryDate, label: method.label, slotLabel: slot.label, fee: method.fee,
+    ...('routeMode' in method ? {
+      routeMode: method.routeMode, routeLabel: method.routeLabel, distanceKm: method.distanceKm,
+      routingPending: method.routingPending, refrigerated: method.refrigerated, fragile: method.fragile,
+      breakdown: method.breakdown,
+    } : {}),
   };
 }

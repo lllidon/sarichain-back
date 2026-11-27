@@ -209,6 +209,15 @@ export class WebWorkspaceController {
           $expr: { $gte: [{ $literal: row.stock }, { $ifNull: ['$offer.reservedStock', 0] }] } },
         { $set: { 'offer.price': row.price, 'offer.stock': row.stock, updatedAt: new Date() } },
       );
+      if (updated.matchedCount) {
+        await this.connection.db!.collection('inventoryMovements').insertOne({
+          _id: 'seller-stock-import:' + String(id) + ':' + new Date().getTime(),
+          productId: String((await this.entries.findOne({ _id: id }, { projection: { 'offer.productId': 1 } }))?.offer?.productId ?? ''),
+          sellerId: String(member._id), offerId: String(id), quantity: row.stock,
+          stockAfter: row.stock, movementType: 'seller_stock_imported',
+          actor: { id: member._id, type: 'member' }, occurredAt: new Date(), schemaVersion: 2,
+        });
+      }
       results.push(updated.matchedCount
         ? { id: String(id), success: true }
         : { id: String(id), success: false, message: 'پیشنهاد فروش متعلق به این حساب نیست، وجود ندارد یا موجودی جدید از مقدار رزروشده کمتر است.' });
@@ -246,6 +255,12 @@ export class WebWorkspaceController {
         ...(location && { locationId: location._id, locationTitle: location.title }),
       },
       createdAt: new Date(),
+    });
+    await this.connection.db!.collection('inventoryMovements').insertOne({
+      _id: 'seller-stock-created:' + String(insertedId),
+      productId: String(productId), sellerId: String(member._id), offerId: String(insertedId),
+      quantity: input.stock, stockAfter: input.stock, movementType: 'seller_stock_created',
+      actor: { id: member._id, type: 'member' }, occurredAt: new Date(), schemaVersion: 2,
     });
     return { id: insertedId };
   }

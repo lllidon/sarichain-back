@@ -97,7 +97,11 @@ export async function quoteBasketDelivery(
     if (!product || (product.kind === 'variant' && !parent)) {
       throw new BadRequestException('یکی از محصولات سبد برای محاسبه حمل در دسترس نیست.');
     }
-    const physical = product.physical ?? parent?.physical;
+    const physical = {
+      ...(parent?.physical ?? {}), ...(product.physical ?? {}),
+      requiresRefrigeration: Boolean(parent?.physical?.requiresRefrigeration || product.physical?.requiresRefrigeration),
+      fragile: Boolean(parent?.physical?.fragile || product.physical?.fragile),
+    };
     const units = (product.saleUnits?.length ? product.saleUnits : parent?.saleUnits) ?? [];
     const unit = line.unitId && line.unitId !== 'unit' ? units.find(item => item.code === line.unitId) : undefined;
     if (line.unitId && line.unitId !== 'unit' && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');

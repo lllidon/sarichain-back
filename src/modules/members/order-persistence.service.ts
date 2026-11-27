@@ -52,6 +52,16 @@ export class OrderPersistenceService {
     ]);
   }
 
+  async findExisting(id: string, signature: string, memberId: Types.ObjectId) {
+    const existing = await this.db.collection('orders').findOne({ _id: id });
+    if (!existing) return null;
+    if (existing.signature !== signature || String(existing.memberId) !== String(memberId)) {
+      throw new ConflictException('این شناسه درخواست قبلاً برای سفارش دیگری استفاده شده است.');
+    }
+    if (existing.status === 'creating') return null;
+    return this.summary(existing);
+  }
+
   async create(input: OrderCreateInput) {
     await this.ensureIndexes();
     const orders = this.db.collection('orders');

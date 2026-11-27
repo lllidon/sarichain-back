@@ -17,6 +17,7 @@ export class InventoryWorkflowService {
       this.db.collection('inventoryMovements').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_inventory_movements_order_time' }),
       this.db.collection('stagingWarehouseBalances').createIndex({ warehouseId: 1, productId: 1 }, { unique: true, name: 'uq_staging_product_balance' }),
       this.db.collection('orderProcessingLogs').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_order_processing_logs_timeline' }),
+      this.db.collection('accountingOutbox').createIndex({ status: 1, createdAt: 1 }, { name: 'ix_accounting_outbox_status_created' }),
     ]);
   }
 
@@ -191,6 +192,11 @@ export class InventoryWorkflowService {
         await this.db.collection('orderMeta').updateOne({ _id: orderId },
           { $set: { 'accounting.externalDocumentId': externalDocumentId, 'accounting.syncStatus': 'synced',
             'accounting.syncedAt': new Date(), updatedAt: new Date() } }, { session });
+        await this.db.collection('accountingOutbox').updateOne(
+          { _id: 'order:' + orderId },
+          { $set: { status: 'completed', externalDocumentId, completedAt: new Date(), updatedAt: new Date() } },
+          { session },
+        );
         await orders.updateOne({ _id: orderId }, { $set: { inventoryStatus: 'posted_to_accounting', updatedAt: new Date() } }, { session });
         await this.log(session, { orderId, stage: 'accounting.posting.completed', status: 'succeeded', actor, correlationId, details: { externalDocumentId, lineCount: reservations.length } });
         result = { orderId, status: 'posted', externalDocumentId };

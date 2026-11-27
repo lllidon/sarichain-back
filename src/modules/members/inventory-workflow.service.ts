@@ -133,25 +133,16 @@ export class InventoryWorkflowService {
     }, { session });
   }
 
-  async stageOrder(orderId: string, sourceWarehouseId: string, actor: Actor, correlationId: string) {
-    if (!sourceWarehouseId?.trim()) throw new BadRequestException('انبار مبدأ مشخص نشده است.');
+  async stageOrder(orderId: string, actor: Actor, correlationId: string) {
     await this.ensureIndexes();
     const session = await this.connection.startSession();
     try {
       let result: any;
       await session.withTransaction(async () => {
-        const orders = this.db.collection<any>('orders');
-        const order = await orders.findOne({ _id: orderId }, { session });
+        const order = await this.db.collection<any>('orders').findOne({ _id: orderId }, { session });
         if (!order) throw new NotFoundException('سفارش پیدا نشد.');
-        const sourceWarehouse = await this.db.collection<any>('warehouses').findOne({ _id: sourceWarehouseId, type: 'main', isActive: true }, { session });
-        if (!sourceWarehouse) throw new NotFoundException('انبار اصلی فعال پیدا نشد.');
-        await this.db.collection<any>('warehouses').updateOne(
-          { _id: STAGING_WAREHOUSE_ID },
-          { $setOnInsert: { name: 'انبار واسط حسابداری', type: 'staging', isActive: true, createdAt: new Date(), schemaVersion: 1 } },
-          { upsert: true, session },
-        );
         if (!['pending', 'confirmed', 'awaiting_inventory'].includes(String(order.status))) {
-          throw new ConflictException('وضعیت سفارش اجازه انتقال به انبار واسط را نمی‌دهد.');
+          throw new ConflictException('وضعیت سفارش اجازه رزرو موجودی را نمی‌دهد.');
         }
         const existing = await this.db.collection<any>('inventoryReservations').find({ orderId }, { session }).toArray();
         if (existing.length) {
@@ -163,22 +154,26 @@ export class InventoryWorkflowService {
         }
         const items = await this.db.collection<any>('orderItems').find({ orderId }, { session }).sort({ lineNumber: 1 }).toArray();
         if (!items.length) throw new ConflictException('سفارش فاقد ردیف محصول است.');
-        await this.log(session, { orderId, stage: 'inventory.staging.started', status: 'started', actor, correlationId, details: { sourceWarehouseId, itemCount: items.length } });
+        await this.log(session, { orderId, stage: 'inventory.seller_stock_reservation.started', status: 'started', actor, correlationId, details: { itemCount: items.length } });
         for (const item of items) {
           const quantity = Number(item.baseQuantity ?? item.quantity);
-          if (!Number.isSafeInteger(quantity) || quantity <= 0) throw new BadRequestException('تعداد ردیف سفارش معتبر نیست.');
-          const balanceId = sourceWarehouseId + ':' + String(item.productId);
-          const reserved = await this.db.collection<any>('warehouseBalances').updateOne(
-            { _id: balanceId, warehouseId: sourceWarehouseId, productId: String(item.productId),
-              $expr: { $gte: [{ $subtract: ['$onHand', '$reserved'] }, quantity] } },
-            { $inc: { reserved: quantity }, $set: { updatedAt: new Date() } }, { session },
+          if (!Number.isSafeInteger(quantity) || quantity <= 0 || !Types.ObjectId.isValid(String(item.offerId)) || !Types.ObjectId.isValid(String(item.sellerId))) {
+            throw new BadRequestException('اطلاعات پیشنهاد فروشنده یا تعداد سفارش معتبر نیست.');
+          }
+          const offerId = new Types.ObjectId(String(item.offerId));
+          const sellerId = new Types.ObjectId(String(item.sellerId));
+          const productId = new Types.ObjectId(String(item.productId));
+          const offerFilter = { _id: offerId, section: 'products', memberId: sellerId, 'offer.productId': productId,
+            $expr: { $gte: [{ $subtract: ['$offer.stock', { $ifNull: ['$offer.reservedStock', 0] }] }, quantity] } };
+          const reserved = await this.db.collection<any>('web_workspace_entries').updateOne(
+            offerFilter, { $inc: { 'offer.reservedStock': quantity }, $set: { updatedAt: new Date() } }, { session },
           );
-          if (!reserved.modifiedCount) throw new ConflictException('موجودی قابل رزرو برای یکی از محصولات کافی نیست.');
+          if (!reserved.modifiedCount) throw new ConflictException('موجودی قابل سفارش این فروشنده برای محصول کافی نیست.');
           const reservationId = orderId + ':' + String(item.lineNumber);
           await this.db.collection<any>('inventoryReservations').insertOne({
             _id: reservationId, orderId, orderItemId: item._id, lineNumber: item.lineNumber,
-            productId: String(item.productId), sourceWarehouseId, stagingWarehouseId: STAGING_WAREHOUSE_ID,
-            quantity, status: 'staged', createdBy: actor.id, createdAt: new Date(), schemaVersion: 1,
+            productId: String(item.productId), sellerId: String(item.sellerId), offerId: String(item.offerId),
+            quantity, status: 'staged', createdBy: actor.id, createdAt: new Date(), schemaVersion: 2,
           }, { session });
           await this.db.collection<any>('stagingWarehouseBalances').updateOne(
             { _id: STAGING_WAREHOUSE_ID + ':' + String(item.productId) },
@@ -188,34 +183,32 @@ export class InventoryWorkflowService {
           );
           await this.db.collection<any>('inventoryMovements').insertOne({
             _id: reservationId + ':stage', orderId, orderItemId: item._id,
-            productId: String(item.productId), quantity, movementType: 'reserve_for_accounting',
-            fromWarehouseId: sourceWarehouseId, toWarehouseId: STAGING_WAREHOUSE_ID,
-            actor, correlationId, occurredAt: new Date(), schemaVersion: 1,
+            productId: String(item.productId), sellerId: String(item.sellerId), offerId: String(item.offerId),
+            quantity, movementType: 'reserve_seller_stock_for_accounting',
+            fromWarehouseId: 'SELLER:' + String(item.sellerId), toWarehouseId: STAGING_WAREHOUSE_ID,
+            actor, correlationId, occurredAt: new Date(), schemaVersion: 2,
           }, { session });
         }
         await this.db.collection<any>('accountingOutbox').updateOne(
           { _id: 'order:' + orderId },
-          { $setOnInsert: { orderId, eventType: 'order.inventory.staged', status: 'pending',
-            attempts: 0, createdAt: new Date(), schemaVersion: 1 } },
+          { $setOnInsert: { orderId, eventType: 'order.inventory.staged', status: 'pending', attempts: 0, createdAt: new Date(), schemaVersion: 1 } },
           { upsert: true, session },
         );
         await this.db.collection<any>('orderMeta').updateOne({ _id: orderId },
-          { $set: { 'inventory.status': 'staged', 'inventory.sourceWarehouseId': sourceWarehouseId,
+          { $set: { 'inventory.status': 'staged', 'inventory.source': 'seller_offers',
             'inventory.stagingWarehouseId': STAGING_WAREHOUSE_ID, updatedAt: new Date() } }, { session });
-        await orders.updateOne({ _id: orderId }, { $set: { inventoryStatus: 'staged', updatedAt: new Date() } }, { session });
-        await this.log(session, { orderId, stage: 'inventory.staging.completed', status: 'succeeded', actor, correlationId, details: { sourceWarehouseId, stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length } });
+        await this.db.collection<any>('orders').updateOne({ _id: orderId }, { $set: { inventoryStatus: 'staged', updatedAt: new Date() } }, { session });
+        await this.log(session, { orderId, stage: 'inventory.seller_stock_reservation.completed', status: 'succeeded', actor, correlationId, details: { stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length } });
         result = { orderId, status: 'staged', stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length };
       });
       return result;
     } catch (error: any) {
       await this.db.collection<any>('orderProcessingLogs').insertOne({
-        orderId, stage: 'inventory.staging.failed', status: 'failed', actor, correlationId,
+        orderId, stage: 'inventory.seller_stock_reservation.failed', status: 'failed', actor, correlationId,
         error: String(error?.message ?? error), occurredAt: new Date(), schemaVersion: 1,
       }).catch(() => undefined);
       throw error;
-    } finally {
-      await session.endSession();
-    }
+    } finally { await session.endSession(); }
   }
 
   async releaseStagedOrder(orderId: string, reason: string, actor: Actor, correlationId: string) {
@@ -240,11 +233,13 @@ export class InventoryWorkflowService {
         }
         await this.log(session, { orderId, stage: 'inventory.reservation_release.started', status: 'started', actor, correlationId, details: { reason } });
         for (const row of rows) {
-          const source = await this.db.collection<any>('warehouseBalances').updateOne(
-            { _id: row.sourceWarehouseId + ':' + row.productId, reserved: { $gte: row.quantity } },
-            { $inc: { reserved: -row.quantity }, $set: { updatedAt: new Date() } }, { session },
+          const source = await this.db.collection<any>('web_workspace_entries').updateOne(
+            { _id: new Types.ObjectId(row.offerId), memberId: new Types.ObjectId(row.sellerId),
+              section: 'products', 'offer.productId': new Types.ObjectId(row.productId),
+              'offer.reservedStock': { $gte: row.quantity } },
+            { $inc: { 'offer.reservedStock': -row.quantity }, $set: { updatedAt: new Date() } }, { session },
           );
-          if (!source.modifiedCount) throw new ConflictException('مقدار رزرو انبار اصلی با سوابق مغایرت دارد.');
+          if (!source.modifiedCount) throw new ConflictException('رزرو موجودی فروشنده با سوابق مغایرت دارد.');
           const staging = await this.db.collection<any>('stagingWarehouseBalances').updateOne(
             { _id: row.stagingWarehouseId + ':' + row.productId, quantity: { $gte: row.quantity }, pendingAccounting: { $gte: row.quantity } },
             { $inc: { quantity: -row.quantity, pendingAccounting: -row.quantity }, $set: { updatedAt: new Date() } }, { session },
@@ -255,7 +250,8 @@ export class InventoryWorkflowService {
           await this.db.collection<any>('inventoryMovements').insertOne({
             _id: row._id + ':released', orderId, orderItemId: row.orderItemId,
             productId: row.productId, quantity: row.quantity, movementType: 'release_reservation',
-            fromWarehouseId: row.stagingWarehouseId, toWarehouseId: row.sourceWarehouseId,
+            fromWarehouseId: row.stagingWarehouseId, toWarehouseId: 'SELLER:' + row.sellerId,
+            sellerId: row.sellerId, offerId: row.offerId,
             actor, correlationId, reason, occurredAt: new Date(), schemaVersion: 1,
           }, { session });
         }
@@ -298,12 +294,13 @@ export class InventoryWorkflowService {
         if (!reservations.length) throw new ConflictException('سفارش در انبار واسط موجودی قابل ثبت ندارد.');
         await this.log(session, { orderId, stage: 'accounting.posting.started', status: 'started', actor, correlationId, details: { externalDocumentId } });
         for (const row of reservations) {
-          const balanceId = row.sourceWarehouseId + ':' + row.productId;
-          const source = await this.db.collection<any>('warehouseBalances').updateOne(
-            { _id: balanceId, onHand: { $gte: row.quantity }, reserved: { $gte: row.quantity } },
-            { $inc: { onHand: -row.quantity, reserved: -row.quantity }, $set: { updatedAt: new Date() } }, { session },
+          const source = await this.db.collection<any>('web_workspace_entries').updateOne(
+            { _id: new Types.ObjectId(row.offerId), memberId: new Types.ObjectId(row.sellerId),
+              section: 'products', 'offer.productId': new Types.ObjectId(row.productId),
+              'offer.stock': { $gte: row.quantity }, 'offer.reservedStock': { $gte: row.quantity } },
+            { $inc: { 'offer.stock': -row.quantity, 'offer.reservedStock': -row.quantity }, $set: { updatedAt: new Date() } }, { session },
           );
-          if (!source.modifiedCount) throw new ConflictException('موجودی انبار اصلی با رزرو ثبت‌شده مغایرت دارد.');
+          if (!source.modifiedCount) throw new ConflictException('موجودی پیشنهاد فروشنده با رزرو ثبت‌شده مغایرت دارد.');
           const stagingId = row.stagingWarehouseId + ':' + row.productId;
           const staged = await this.db.collection<any>('stagingWarehouseBalances').updateOne(
             { _id: stagingId, quantity: { $gte: row.quantity }, pendingAccounting: { $gte: row.quantity } },
@@ -315,7 +312,8 @@ export class InventoryWorkflowService {
           await this.db.collection<any>('inventoryMovements').insertOne({
             _id: row._id + ':accounted', orderId, orderItemId: row.orderItemId,
             productId: row.productId, quantity: row.quantity, movementType: 'accounting_issue',
-            fromWarehouseId: row.sourceWarehouseId, toWarehouseId: null,
+            fromWarehouseId: 'SELLER:' + row.sellerId, toWarehouseId: null,
+            sellerId: row.sellerId, offerId: row.offerId,
             accountingDocumentId: externalDocumentId, actor, correlationId,
             occurredAt: new Date(), schemaVersion: 1,
           }, { session });

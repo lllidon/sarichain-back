@@ -98,19 +98,18 @@ export async function quoteBasketDelivery(
     if (!product || (product.kind === 'variant' && !parent)) {
       throw new BadRequestException('یکی از محصولات سبد برای محاسبه حمل در دسترس نیست.');
     }
-    const sellerOffers = offers.get(line.productId.toLowerCase()) ?? [];
-    const offer = line.offerId ? sellerOffers.find(item => item.id === line.offerId) : sellerOffers.find(item => item.stock >= line.quantity);
-    if (!offer || !offer.pickupLocation ||
-        !Number.isFinite(offer.pickupLocation.latitude) || !Number.isFinite(offer.pickupLocation.longitude)) {
-      throw new BadRequestException('برای یکی از عرضه‌کنندگان، موقعیت بارگیری روی نقشه ثبت نشده است.');
-    }
     const physical = product.physical ?? parent?.physical;
     const units = (product.saleUnits?.length ? product.saleUnits : parent?.saleUnits) ?? [];
     const unit = line.unitId && line.unitId !== 'unit' ? units.find(item => item.code === line.unitId) : undefined;
     if (line.unitId && line.unitId !== 'unit' && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');
     const baseQuantity = line.quantity * (unit?.quantity ?? 1);
     if (!Number.isSafeInteger(baseQuantity)) throw new BadRequestException('تعداد واحدهای قابل حمل بیش از حد مجاز است.');
-    if (offer.stock < baseQuantity) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
+    const sellerOffers = offers.get(line.productId.toLowerCase()) ?? [];
+    const offer = line.offerId ? sellerOffers.find(item => item.id === line.offerId) : sellerOffers.find(item => item.stock >= baseQuantity);
+    if (!offer || offer.stock < baseQuantity) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
+    if (!offer.pickupLocation || !Number.isFinite(offer.pickupLocation.latitude) || !Number.isFinite(offer.pickupLocation.longitude)) {
+      throw new BadRequestException('برای یکی از عرضه‌کنندگان، موقعیت بارگیری روی نقشه ثبت نشده است.');
+    }
     const dimensions = physical?.shippingDimensions;
     const unitVolume = dimensions
       ? dimensions.lengthMm * dimensions.widthMm * dimensions.heightMm / 1_000_000_000
@@ -122,6 +121,9 @@ export async function quoteBasketDelivery(
     const density = physical?.standardDensityKgM3 ?? tariffs.densityKgPerM3;
     const volumeM3 = (unitVolume ?? (unitWeight! / density)) * baseQuantity;
     const weightKg = (unitWeight ?? (unitVolume! * density)) * baseQuantity;
+    if (!Number.isFinite(volumeM3) || volumeM3 <= 0 || !Number.isFinite(weightKg) || weightKg <= 0) {
+      throw new BadRequestException('مشخصات وزن و حجم یکی از محصولات برای حمل معتبر نیست.');
+    }
     const cold = Boolean(physical?.requiresRefrigeration);
     const isFragile = Boolean(physical?.fragile);
     refrigerated ||= cold;

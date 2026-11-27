@@ -1,4 +1,5 @@
 import { Transform, Type } from 'class-transformer';
+import { IsBoolean } from 'class-validator';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 export const transportUrgencies = ['normal', 'special', 'express', 'urgent'] as const;
@@ -36,6 +37,14 @@ export class TransportZoneTariffsDto {
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) stopWeight!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10000) densityKgPerM3!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(10) minimumKar!: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) refrigeratedBaseKar?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) refrigeratedPerKgKar?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) fragileMultiplier?: number;
+  @IsOptional() @IsBoolean() hubEnabled?: boolean;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) hubLatitude?: number;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) hubLongitude?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) hubHandlingKar?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) hubPerKgKar?: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) normalMultiplier!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) specialMultiplier!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) expressMultiplier!: number;
@@ -44,7 +53,10 @@ export class TransportZoneTariffsDto {
 export interface TransportZoneTariffRecord {
   _id: string; baseKar: number; distanceWeight: number; billableWeightWeight: number; stopWeight: number;
   densityKgPerM3: number; minimumKar: number; normalMultiplier: number; specialMultiplier: number;
-  expressMultiplier: number; urgentMultiplier: number; createdAt?: Date; updatedAt?: Date;
+  expressMultiplier: number; urgentMultiplier: number;
+  refrigeratedBaseKar: number; refrigeratedPerKgKar: number; fragileMultiplier: number;
+  hubEnabled: boolean; hubLatitude?: number; hubLongitude?: number; hubHandlingKar: number; hubPerKgKar: number;
+  createdAt?: Date; updatedAt?: Date;
 }
 export const zoneDefinitions = [
   { id: 'zone-0', label: 'زون ۰', minKm: 0, maxKm: 10 },
@@ -64,6 +76,8 @@ export const defaultTransportZoneTariffs: TransportZoneTariffRecord = {
   _id: 'default', baseKar: 2, distanceWeight: 0.02, billableWeightWeight: 0.001,
   stopWeight: 0.1, densityKgPerM3: 250, minimumKar: 2,
   normalMultiplier: 1, specialMultiplier: 1.35, expressMultiplier: 1.8, urgentMultiplier: 2.5,
+  refrigeratedBaseKar: 0, refrigeratedPerKgKar: 0, fragileMultiplier: 1.15,
+  hubEnabled: false, hubHandlingKar: 0, hubPerKgKar: 0,
 };
 
 function normalize(value: string) {

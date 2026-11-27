@@ -8,7 +8,7 @@ import { AllowClient, type AccessRequest } from '../auth/access';
 import { AdminGuard } from '../auth/admin.guard';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { Branch, BranchOrder, Profile } from './organization.schemas';
-import { TransportTariffDto, TransportTariffRecord, defaultTransportTariffs, TransportZoneTariffsDto, TransportZoneTariffRecord, defaultTransportZoneTariffs, zoneDefinitions, speedDefinitions, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
+import { TransportZoneTariffsDto, TransportZoneTariffRecord, defaultTransportZoneTariffs, zoneDefinitions, speedDefinitions, findEligibleTransportCarriers, quoteTransportOrder } from '../members/transport-orders';
 
 enum SettingsList {
   Branches = 'branches',
@@ -54,7 +54,7 @@ export class OrganizationController {
     const enriched = await Promise.all(items.map(async order => ({
       ...order,
       ...(order.status === 'pending_review' || order.status === 'approved' ? {
-        quote: await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, await this.readZoneTariffs()),
+        quote: await quoteTransportOrder(order.stops, order.weightKg, order.volumeM3, order.urgency, zoneTariffs),
         candidates: await findEligibleTransportCarriers(this.connection.db!, order.weightKg, order.volumeM3, order.stops, zoneTariffs.densityKgPerM3),
       } : { candidates: [] }),
     })));
@@ -90,32 +90,6 @@ export class OrganizationController {
     return { id, status: 'approved', matchedCount: matchedCarrierIds.length, specialCount: specialCarrierIds.length };
   }
 
-  @Get('transport-tariffs')
-  @UseGuards(AdminGuard)
-  @Header('Cache-Control', 'private, no-store')
-  async getTransportTariffs() {
-    const stored = await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').findOne({ _id: 'default' }) ?? defaultTransportTariffs;
-    return {
-      intracityBaseKar: stored.intracityBaseKar,
-      intercityBaseKar: stored.intercityBaseKar,
-      interprovincialBaseKar: stored.interprovincialBaseKar,
-      perKmKar: stored.perKmKar,
-      perKgKar: stored.perKgKar,
-      perCubicMeterKar: stored.perCubicMeterKar,
-      hourlyMultiplier: stored.hourlyMultiplier,
-      dailyMultiplier: stored.dailyMultiplier,
-      multidayMultiplier: stored.multidayMultiplier,
-      specialMultiplier: stored.specialMultiplier,
-    };
-  }
-
-  @Patch('transport-tariffs')
-  @UseGuards(AdminGuard)
-  async saveTransportTariffs(@Body() input: TransportTariffDto) {
-    const values = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
-    await this.connection.db!.collection<TransportTariffRecord>('transport_tariffs').updateOne({ _id: 'default' }, { $set: { ...values, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } }, { upsert: true });
-    return this.getTransportTariffs();
-  }
   private async readZoneTariffs(): Promise<TransportZoneTariffRecord> {
     const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
     await collection.updateOne({ _id: 'default' }, { $setOnInsert: defaultTransportZoneTariffs }, { upsert: true });

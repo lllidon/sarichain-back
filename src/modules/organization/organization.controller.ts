@@ -109,11 +109,13 @@ export class OrganizationController {
   @UseGuards(AdminGuard)
   async saveTransportZoneTariffs(@Body() input: TransportZoneTariffsDto) {
     const now = new Date();
+    const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
+    const current = await collection.findOne({ _id: 'default' });
+    const supplied = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
     const record: TransportZoneTariffRecord = {
-      ...defaultTransportZoneTariffs, _id: 'default', ...input, updatedAt: now,
+      ...defaultTransportZoneTariffs, ...(current ?? {}), ...supplied, _id: 'default', updatedAt: now,
     };
-    await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs')
-      .updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });
+    await collection.updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });
     return this.getTransportZoneTariffs();
   }
 

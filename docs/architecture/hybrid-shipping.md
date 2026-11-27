@@ -55,6 +55,13 @@ All prices are calculated and rounded on the backend. At checkout, the backend r
 - `POST /web/orders`: delivery selection includes method, dispatch date, slot, saved `addressId` and the quote snapshot; the backend resolves destination coordinates from the authenticated customer's address book (`quotedFee`, `quotedRouteMode`, `quotedDistanceKm`). The backend recomputes before persistence.
 - `GET /web/delivery-options` retains the previous three fixed-fee methods for old storefront clients during staged rollout. The updated cart uses `POST` for cart-specific quotes. Legacy order submissions without destination coordinates remain accepted; new quote-backed orders are revalidated.
 
+## Customer-facing order numbers
+
+- Format: `SCYYMMDDCCNNNN` (14 characters), where `YYMMDD` is the Iranian/Jalali date in the `Asia/Tehran` time zone, `CC` is the last two digits of the customer's normalized mobile number (or `00` when unavailable), and `NNNN` is a zero-padded sequence.
+- The sequence is allocated atomically in MongoDB per Jalali date and customer suffix, so concurrent order creation cannot allocate the same number.
+- The sequence is padded to at least four digits and is not truncated if daily volume exceeds 9,999 for a suffix.
+- The persistence layer accepts both MongoDB driver return shapes for `findOneAndUpdate` (legacy `ModifyResult.value` and newer direct-document result).
+
 ## Admin configuration
 
 The existing `transport_zone_tariffs` singleton stores the new parameters:

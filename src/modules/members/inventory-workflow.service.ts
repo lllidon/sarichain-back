@@ -10,6 +10,55 @@ export class InventoryWorkflowService {
   constructor(@InjectConnection() private readonly connection: Connection) {}
   private get db() { return this.connection.db!; }
 
+  private async ensureIndexes() {
+    await Promise.all([
+      this.db.collection('warehouseBalances').createIndex({ warehouseId: 1, productId: 1 }, { unique: true, name: 'uq_warehouse_product_balance' }),
+      this.db.collection('inventoryReservations').createIndex({ orderId: 1, status: 1 }, { name: 'ix_inventory_reservations_order_status' }),
+      this.db.collection('inventoryMovements').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_inventory_movements_order_time' }),
+      this.db.collection('stagingWarehouseBalances').createIndex({ warehouseId: 1, productId: 1 }, { unique: true, name: 'uq_staging_product_balance' }),
+      this.db.collection('orderProcessingLogs').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_order_processing_logs_timeline' }),
+    ]);
+  }
+
+  async createWarehouse(input: { id: string; name: string; type: 'main' | 'staging'; actor: Actor }) {
+    await this.ensureIndexes();
+    if (!input.id.trim() || !input.name.trim()) throw new BadRequestException('شناسه و نام انبار الزامی است.');
+    await this.db.collection('warehouses').updateOne({ _id: input.id }, {
+      $setOnInsert: { name: input.name.trim(), type: input.type, isActive: true, createdAt: new Date(), createdBy: input.actor.id, schemaVersion: 1 },
+    }, { upsert: true });
+    return this.db.collection('warehouses').findOne({ _id: input.id });
+  }
+
+  async setOpeningBalance(input: { warehouseId: string; productId: string; quantity: number; actor: Actor; correlationId: string }) {
+    await this.ensureIndexes();
+    if (!Number.isSafeInteger(input.quantity) || input.quantity < 0) throw new BadRequestException('موجودی اولیه باید عدد صحیح نامنفی باشد.');
+    const session = await this.connection.startSession();
+    try {
+      await session.withTransaction(async () => {
+        const warehouse = await this.db.collection('warehouses').findOne({ _id: input.warehouseId, isActive: true }, { session });
+        if (!warehouse) throw new NotFoundException('انبار فعال پیدا نشد.');
+        const id = input.warehouseId + ':' + input.productId;
+        const existing = await this.db.collection('warehouseBalances').findOne({ _id: id }, { session });
+        if (existing) throw new ConflictException('موجودی اولیه قبلاً ثبت شده است؛ برای اصلاح از سند تعدیل موجودی استفاده کنید.');
+        await this.db.collection('warehouseBalances').insertOne({
+          _id: id, warehouseId: input.warehouseId, productId: input.productId,
+          onHand: input.quantity, reserved: 0, updatedAt: new Date(), createdAt: new Date(), schemaVersion: 1,
+        }, { session });
+        await this.db.collection('inventoryMovements').insertOne({
+          _id: 'opening:' + id, productId: input.productId, quantity: input.quantity,
+          movementType: 'opening_balance', toWarehouseId: input.warehouseId,
+          actor: input.actor, correlationId: input.correlationId, occurredAt: new Date(), schemaVersion: 1,
+        }, { session });
+      });
+      return { warehouseId: input.warehouseId, productId: input.productId, onHand: input.quantity, reserved: 0 };
+    } finally { await session.endSession(); }
+  }
+
+  async getBalances(warehouseId: string) {
+    await this.ensureIndexes();
+    return this.db.collection('warehouseBalances').find({ warehouseId }).sort({ productId: 1 }).toArray();
+  }
+
   private async log(session: any, input: {
     orderId: string; stage: string; status: 'started' | 'succeeded' | 'failed';
     actor: Actor; correlationId: string; details?: Record<string, unknown>; error?: string;
@@ -24,6 +73,7 @@ export class InventoryWorkflowService {
 
   async stageOrder(orderId: string, sourceWarehouseId: string, actor: Actor, correlationId: string) {
     if (!sourceWarehouseId?.trim()) throw new BadRequestException('انبار مبدأ مشخص نشده است.');
+    await this.ensureIndexes();
     const session = await this.connection.startSession();
     try {
       let result: any;
@@ -92,6 +142,7 @@ export class InventoryWorkflowService {
 
   async confirmAccountingPosting(orderId: string, externalDocumentId: string, actor: Actor, correlationId: string) {
     if (!externalDocumentId?.trim()) throw new BadRequestException('شناسه سند حسابداری الزامی است.');
+    await this.ensureIndexes();
     const session = await this.connection.startSession();
     try {
       let result: any;

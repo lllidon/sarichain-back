@@ -222,7 +222,7 @@ async function main() {
       offers++;
     }
 
-    const seededProductIds = (await products.find({ sku: /^SC-3\\d{3}$/, kind: 'master' }, { projection: { _id: 1 } }).toArray()).map(row => row._id);
+    const seededProductIds = (await products.find({ sku: /^SC-3\d{3}$/, kind: 'master' }, { projection: { _id: 1 } }).toArray()).map(row => row._id);
     const publishedOffers = await workspace.countDocuments({
       demoSeedKey: seedKey, section: 'products', 'offer.productId': { $in: seededProductIds },
     });

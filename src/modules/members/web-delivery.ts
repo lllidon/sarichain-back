@@ -239,7 +239,7 @@ export async function quoteBasketDelivery(
 
 
 export function resolveDelivery(
-  input: { method: string; dispatchDate: string; slot: string },
+  input: { method: string; dispatchDate: string; slot: string; destination: DeliveryPoint },
   options: BasketDeliveryQuote[],
 ) {
   const method = options.find(option => option.id === input.method);

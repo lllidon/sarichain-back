@@ -147,6 +147,9 @@ ProductSchema.index({ masterId: 1, isActive: 1 });
 
 ProductSchema.pre('validate', function () {
   const physical = this.physical;
+  if ((physical?.temperatureMinC == null) !== (physical?.temperatureMaxC == null)) {
+    this.invalidate('physical.temperatureMinC', 'Provide both minimum and maximum transport temperatures.');
+  }
   if (physical?.temperatureMinC != null && physical?.temperatureMaxC != null && physical.temperatureMinC > physical.temperatureMaxC) {
     this.invalidate('physical.temperatureMinC', 'Minimum transport temperature cannot exceed maximum temperature.');
   }

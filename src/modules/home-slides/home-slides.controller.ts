@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isObjectIdOrHexString, Model } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
@@ -30,6 +30,7 @@ export class HomeSlidesController {
   }
 
   @Delete(':id')
+  @HttpCode(204)
   async remove(@Param('id') id: string) {
     if (!isObjectIdOrHexString(id)) throw new BadRequestException('شناسه اسلایدر معتبر نیست.');
     await this.slides.findByIdAndDelete(id).exec();

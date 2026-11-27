@@ -100,13 +100,13 @@ export class StoreOrdersController {
       { projection: { imageUrl: 1, thumbnailUrl: 1, gallery: 1, sku: 1 } },
     ).toArray() : [];
     const productMap = new Map(products.map(product => [String(product._id), product]));
+    const normalizedMeta = meta ? { ...meta, shipping: meta.shipping ? { ...meta.shipping, fee: fromMinor(meta.shipping.fee) } : meta.shipping } : meta;
     return { ...order, customer: member ?? order.customer ?? null, total: fromMinor(order.total),
-      meta: meta ? { ...meta, shipping: meta.shipping ? { ...meta.shipping, fee: fromMinor(meta.shipping.fee) } : meta.shipping } : meta,
       subtotal: { min: fromMinor(order.subtotal?.min), max: fromMinor(order.subtotal?.max) },
       price: { min: fromMinor(order.price?.min), max: fromMinor(order.price?.max) },
       items: items.map(item => { const product = productMap.get(String(item.productId)); return { ...item, image: product?.thumbnailUrl || product?.imageUrl || product?.gallery?.[0] || null, sku: product?.sku || null, unitPrice: { min: fromMinor(item.unitPrice?.min), max: fromMinor(item.unitPrice?.max) },
         lineSubtotal: { min: fromMinor(item.lineSubtotal?.min), max: fromMinor(item.lineSubtotal?.max) } }; }),
-      meta, events };
+      meta: normalizedMeta, events };
   }
 
   @Patch(':id')

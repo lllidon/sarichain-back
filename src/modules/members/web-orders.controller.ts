@@ -10,7 +10,7 @@ import { PriceRange, Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { CartService } from '../cart/cart.service';
 import { producerOffers } from '../catalog/producer-offers';
-import { deliveryMethods, deliveryOptions, deliverySlots, quoteBasketDelivery, resolveDelivery } from './web-delivery';
+import { deliveryMethods, deliverySlots, quoteBasketDelivery, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { OrderPersistenceService } from './order-persistence.service';
 

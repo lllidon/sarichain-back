@@ -41,20 +41,20 @@ export class OrderPersistenceService {
 
   private async ensureIndexes() {
     await Promise.all([
-      this.db.collection('orders').createIndex({ orderNumber: 1 }, { unique: true, name: 'uq_orders_order_number' }),
-      this.db.collection('orders').createIndex({ memberId: 1, createdAt: -1, _id: -1 }, { name: 'ix_orders_member_created' }),
-      this.db.collection('orders').createIndex({ status: 1, createdAt: -1 }, { name: 'ix_orders_status_created' }),
-      this.db.collection('orders').createIndex({ 'source.requestId': 1, memberId: 1 }, { unique: true, name: 'uq_orders_request_member', partialFilterExpression: { 'source.requestId': { $type: 'string' } } }),
-      this.db.collection('orderItems').createIndex({ orderId: 1, lineNumber: 1 }, { unique: true, name: 'uq_order_items_line' }),
-      this.db.collection('orderItems').createIndex({ productId: 1, createdAt: -1 }, { name: 'ix_order_items_product_created' }),
-      this.db.collection('orderItems').createIndex({ sellerId: 1, createdAt: -1 }, { name: 'ix_order_items_seller_created', sparse: true }),
-      this.db.collection('orderMeta').createIndex({ updatedAt: -1 }, { name: 'ix_order_meta_updated' }),
-      this.db.collection('orderEvents').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_order_events_timeline' }),
+      this.db.collection<any>('orders').createIndex({ orderNumber: 1 }, { unique: true, name: 'uq_orders_order_number' }),
+      this.db.collection<any>('orders').createIndex({ memberId: 1, createdAt: -1, _id: -1 }, { name: 'ix_orders_member_created' }),
+      this.db.collection<any>('orders').createIndex({ status: 1, createdAt: -1 }, { name: 'ix_orders_status_created' }),
+      this.db.collection<any>('orders').createIndex({ 'source.requestId': 1, memberId: 1 }, { unique: true, name: 'uq_orders_request_member', partialFilterExpression: { 'source.requestId': { $type: 'string' } } }),
+      this.db.collection<any>('orderItems').createIndex({ orderId: 1, lineNumber: 1 }, { unique: true, name: 'uq_order_items_line' }),
+      this.db.collection<any>('orderItems').createIndex({ productId: 1, createdAt: -1 }, { name: 'ix_order_items_product_created' }),
+      this.db.collection<any>('orderItems').createIndex({ sellerId: 1, createdAt: -1 }, { name: 'ix_order_items_seller_created', sparse: true }),
+      this.db.collection<any>('orderMeta').createIndex({ updatedAt: -1 }, { name: 'ix_order_meta_updated' }),
+      this.db.collection<any>('orderEvents').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_order_events_timeline' }),
     ]);
   }
 
   async recordWorkflowLog(input: { orderId: string; stage: string; status: 'started' | 'succeeded' | 'failed'; actorId: Types.ObjectId | string; correlationId: string; details?: Record<string, unknown>; error?: string }) {
-    await this.db.collection('orderProcessingLogs').insertOne({
+    await this.db.collection<any>('orderProcessingLogs').insertOne({
       orderId: input.orderId, stage: input.stage, status: input.status,
       actor: { id: input.actorId, type: 'member' }, correlationId: input.correlationId,
       details: input.details ?? {}, ...(input.error && { error: input.error }),
@@ -63,7 +63,7 @@ export class OrderPersistenceService {
   }
 
   async findExisting(id: string, signature: string, memberId: Types.ObjectId) {
-    const existing = await this.db.collection('orders').findOne({ _id: id });
+    const existing = await this.db.collection<any>('orders').findOne({ _id: id });
     if (!existing) return null;
     if (existing.signature !== signature || String(existing.memberId) !== String(memberId)) {
       throw new ConflictException('این شناسه درخواست قبلاً برای سفارش دیگری استفاده شده است.');
@@ -75,7 +75,7 @@ export class OrderPersistenceService {
   async create(input: OrderCreateInput) {
     await this.ensureIndexes();
     await this.recordWorkflowLog({ orderId: input.id, stage: 'order.persistence.started', status: 'started', actorId: input.memberId, correlationId: input.source.requestId, details: { itemCount: input.items.length } });
-    const orders = this.db.collection('orders');
+    const orders = this.db.collection<any>('orders');
     const existing = await orders.findOne({ _id: input.id });
     if (existing) {
       if (existing.signature !== input.signature || String(existing.memberId) !== String(input.memberId)) {
@@ -87,7 +87,7 @@ export class OrderPersistenceService {
     let orderNumber = existing?.orderNumber as string | undefined;
     if (!orderNumber) {
       const year = new Date().getUTCFullYear();
-      const counterResult = await this.db.collection('order_sequences').findOneAndUpdate(
+      const counterResult = await this.db.collection<any>('order_sequences').findOneAndUpdate(
         { _id: 'orders:' + year }, { $inc: { value: 1 }, $setOnInsert: { createdAt: new Date() } },
         { upsert: true, returnDocument: 'after' },
       ) as any;
@@ -109,7 +109,7 @@ export class OrderPersistenceService {
     const current = await orders.findOne({ _id: input.id });
     if (!current || current.signature !== input.signature) throw new ConflictException('ثبت سفارش هم‌زمان با درخواست دیگری تداخل پیدا کرد.');
     if (current.status !== 'pending') {
-      const itemCollection = this.db.collection('orderItems');
+      const itemCollection = this.db.collection<any>('orderItems');
       for (let index = 0; index < input.items.length; index++) {
         const item = input.items[index];
         const unitPriceMin = moneyToMinor(item.price.min);
@@ -125,7 +125,7 @@ export class OrderPersistenceService {
           createdBy: input.memberId, createdAt: now, updatedAt: now, schemaVersion: 1,
         }, { upsert: true });
       }
-      await this.db.collection('orderMeta').updateOne({ _id: input.id }, {
+      await this.db.collection<any>('orderMeta').updateOne({ _id: input.id }, {
         $setOnInsert: { orderId: input.id, createdAt: now },
         $set: {
           shipping: input.delivery ? { method: input.delivery, status: 'pending' } : { status: 'not_requested' },
@@ -136,7 +136,7 @@ export class OrderPersistenceService {
           extensions: {}, updatedAt: now, schemaVersion: 1,
         },
       }, { upsert: true });
-      await this.db.collection('orderEvents').updateOne(
+      await this.db.collection<any>('orderEvents').updateOne(
         { _id: input.id + ':created' },
         { $setOnInsert: { orderId: input.id, type: 'order.created', fromStatus: null, toStatus: 'pending', actorId: input.memberId, occurredAt: now, payload: { source: input.source }, schemaVersion: 1 } },
         { upsert: true },
@@ -149,7 +149,7 @@ export class OrderPersistenceService {
 
   async list(memberId: Types.ObjectId, page: number, limit: number) {
     await this.ensureIndexes();
-    const orders = this.db.collection('orders');
+    const orders = this.db.collection<any>('orders');
     const filter = { memberId, status: { $nin: ['completed', 'cancelled', 'creating'] } };
     const [headers, total] = await Promise.all([
       orders.find(filter, { projection: { signature: 0, memberId: 0 } })
@@ -158,8 +158,8 @@ export class OrderPersistenceService {
     ]);
     const ids = headers.map(order => String(order._id));
     const [lines, metadata] = await Promise.all([
-      this.db.collection('orderItems').find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray(),
-      this.db.collection('orderMeta').find({ _id: { $in: ids } }).toArray(),
+      this.db.collection<any>('orderItems').find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray(),
+      this.db.collection<any>('orderMeta').find({ _id: { $in: ids } }).toArray(),
     ]);
     const byOrder = new Map<string, any[]>();
     for (const line of lines) {

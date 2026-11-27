@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayUnique, IsArray, IsEmail, IsIn, IsObject, IsOptional, IsString, Length, Matches, MaxLength, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayUnique, IsArray, IsEmail, IsIn, IsObject, IsOptional, IsString, Length, Matches, MaxLength, ValidateIf, ValidateNested, IsNumber, Min, Max } from 'class-validator';
 import { mobileNumberPattern, normalizePhone } from '../auth/phone';
 import { MemberGroup, memberTypes, vehicleTypes } from './member-types';
 
@@ -20,11 +20,25 @@ class VehicleDto {
   @ApiProperty() @Transform(trimmed) @IsString() @Length(2, 80) license!: string;
 }
 
+class DeliveryAddressDto {
+  @ApiProperty() @IsString() @Matches(/^[a-zA-Z0-9-]{8,40}$/) id!: string;
+  @ApiProperty() @Transform(trimmed) @IsString() @Length(1, 80) title!: string;
+  @ApiProperty() @Transform(trimmed) @IsString() @Length(1, 160) recipientName!: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trimmed) @IsString() @MaxLength(32) phone?: string;
+  @ApiProperty() @Transform(trimmed) @IsString() @Length(5, 500) address!: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trimmed) @IsString() @MaxLength(100) province?: string;
+  @ApiPropertyOptional() @IsOptional() @Transform(trimmed) @IsString() @MaxLength(100) city?: string;
+  @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^[0-9۰-۹-]{0,20}$/) postalCode?: string;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) latitude?: number;
+  @ApiPropertyOptional() @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude?: number;
+}
+
 export class MarketplaceProfileDto {
   @ApiPropertyOptional() @IsOptional() @Transform(trimmed) @IsString() @Length(1, 160) fullName?: string;
   @ApiPropertyOptional() @ValidateIf((_, value) => value !== undefined && value !== '') @IsEmail() @MaxLength(254) email?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(160) organization?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @MaxLength(500) address?: string;
+  @ApiPropertyOptional({ type: [DeliveryAddressDto] }) @IsOptional() @IsArray() @ArrayMaxSize(20) @ArrayUnique((item: DeliveryAddressDto) => item.id) @ValidateNested({ each: true }) @Type(() => DeliveryAddressDto) deliveryAddresses?: DeliveryAddressDto[];
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) provinceCode?: string;
   @ApiPropertyOptional() @IsOptional() @IsString() @Matches(/^\d{0,10}$/) cityCode?: string;
   @ApiPropertyOptional({ enum: memberTypes[MemberGroup.Customers] })

@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, IsIn, Max, MaxLength, Min } from 'class-validator';
 
 export class CatalogQueryDto {
   @ApiPropertyOptional({ default: 1, minimum: 1, maximum: 10000 })
@@ -22,4 +22,9 @@ export class CatalogQueryDto {
   @IsString()
   @MaxLength(100)
   search?: string;
+
+  @ApiPropertyOptional({ enum: ['current', 'completed', 'returned', 'cancelled'] })
+  @IsOptional()
+  @IsIn(['current', 'completed', 'returned', 'cancelled'])
+  status?: string;
 }

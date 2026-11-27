@@ -176,7 +176,8 @@ export class OrderPersistenceService {
   async list(memberId: Types.ObjectId, page: number, limit: number, status?: string) {
     await this.ensureIndexes();
     const orders = this.db.collection<any>('orders');
-    const filter: Record<string, any> = { memberId, status: { $ne: 'creating' } };
+    const allOrdersFilter = { memberId, status: { $ne: 'creating' } };
+    const filter: Record<string, any> = { ...allOrdersFilter };
     if (status === 'current') filter.status = { $nin: ['creating', 'completed', 'returned', 'refunded', 'cancelled', 'canceled'] };
     else if (status === 'completed') filter.status = 'completed';
     else if (status === 'returned') filter.status = { $in: ['returned', 'refunded'] };
@@ -186,7 +187,7 @@ export class OrderPersistenceService {
         .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
       orders.aggregate([
-        { $match: filter },
+        { $match: allOrdersFilter },
         { $group: { _id: '$status', count: { $sum: 1 } } },
       ]).toArray(),
     ]);

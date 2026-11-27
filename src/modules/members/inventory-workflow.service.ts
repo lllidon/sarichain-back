@@ -72,7 +72,7 @@ export class InventoryWorkflowService {
     const pipeline: any[] = [
       { $match: { section: 'products', 'offer.productId': { $exists: true } } },
       { $sort: { createdAt: -1, _id: -1 } },
-      { $group: { _id: { productId: '$offer.productId', sellerId: '$memberId' }, entry: { $first: '$ROOT' } } },
+      { $group: { _id: { productId: '$offer.productId', sellerId: '$memberId' }, entry: { $first: { _id: '$_id', memberId: '$memberId', offer: '$offer', createdAt: '$createdAt', updatedAt: '$updatedAt' } } } },
       { $lookup: { from: 'products', localField: '_id.productId', foreignField: '_id', as: 'product' } },
       { $unwind: '$product' },
       { $lookup: { from: 'members', localField: '_id.sellerId', foreignField: '_id', as: 'seller' } },

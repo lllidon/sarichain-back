@@ -181,7 +181,7 @@ export class WebOrdersController {
       });
       await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.products.validated', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { itemCount: items.length } });
       const shippingOptions = requestedDelivery
-        ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination) : undefined;
+        ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination) : [];
       const delivery = requestedDelivery ? resolveDelivery(requestedDelivery, shippingOptions) : undefined;
       if (delivery && input.delivery && (
         Math.abs(delivery.fee - input.delivery.quotedFee) > 0.0001 ||

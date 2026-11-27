@@ -20,6 +20,68 @@ export class InventoryWorkflowService {
     ]);
   }
 
+  async getProductStockSummary(search = '', page = 1, limit = 20) {
+    await this.ensureIndexes();
+    const safePage = Math.max(1, Math.floor(page));
+    const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
+    const escaped = [...search.trim()].map(char => '.^$*+?()[]{}|\\'.includes(char) ? '\\' + char : char).join('');
+    const pipeline: any[] = [
+      { $match: { section: 'products', 'offer.productId': { $exists: true } } },
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $group: { _id: { productId: '$offer.productId', sellerId: '$memberId' }, entry: { $first: '$ROOT' } } },
+      { $lookup: { from: 'products', localField: '_id.productId', foreignField: '_id', as: 'product' } },
+      { $unwind: '$product' },
+      { $lookup: { from: 'members', localField: '_id.sellerId', foreignField: '_id', as: 'seller' } },
+      { $unwind: '$seller' },
+      { $match: { 'seller.isActive': { $ne: false }, 'seller.producerType': { $type: 'string', $ne: '' } } },
+      { $group: {
+        _id: '$product._id',
+        name: { $first: '$product.name' },
+        sku: { $first: '$product.sku' },
+        unit: { $first: '$entry.offer.unit' },
+        isActive: { $first: '$product.isActive' },
+        totalStock: { $sum: { $ifNull: ['$entry.offer.stock', 0] } },
+        reservedStock: { $sum: { $ifNull: ['$entry.offer.reservedStock', 0] } },
+        sellerCount: { $sum: 1 },
+        sellers: { $push: {
+          sellerId: '$_id.sellerId',
+          name: { $ifNull: ['$seller.organization', '$seller.fullName'] },
+          city: '$seller.city',
+          offerId: '$entry._id',
+          price: '$entry.offer.price',
+          stock: { $ifNull: ['$entry.offer.stock', 0] },
+          reservedStock: { $ifNull: ['$entry.offer.reservedStock', 0] },
+          availableStock: { $subtract: [{ $ifNull: ['$entry.offer.stock', 0] }, { $ifNull: ['$entry.offer.reservedStock', 0] }] },
+          unit: '$entry.offer.unit',
+          updatedAt: '$entry.updatedAt',
+        } },
+      } },
+      { $addFields: { availableStock: { $subtract: ['$totalStock', '$reservedStock'] } } },
+    ];
+    if (escaped) pipeline.push({ $match: { $or: [
+      { name: new RegExp(escaped, 'i') },
+      { sku: new RegExp(escaped, 'i') },
+      { 'sellers.name': new RegExp(escaped, 'i') },
+    ] } });
+    pipeline.push(
+      { $sort: { name: 1, _id: 1 } },
+      { $facet: {
+        items: [{ $skip: (safePage - 1) * safeLimit }, { $limit: safeLimit }],
+        count: [{ $count: 'total' }],
+        totals: [{ $group: { _id: null, products: { $sum: 1 }, stock: { $sum: '$totalStock' }, available: { $sum: '$availableStock' }, sellers: { $sum: '$sellerCount' } } }],
+      } },
+    );
+    const [result] = await this.db.collection<any>('web_workspace_entries').aggregate(pipeline).toArray();
+    const totals = result?.totals?.[0] ?? { products: 0, stock: 0, available: 0, sellers: 0 };
+    return {
+      items: result?.items ?? [],
+      total: result?.count?.[0]?.total ?? 0,
+      page: safePage,
+      limit: safeLimit,
+      summary: { products: totals.products, totalStock: totals.stock, availableStock: totals.available, sellerOffers: totals.sellers },
+    };
+  }
+
   async getStagingBalances() {
     await this.ensureIndexes();
     return this.db.collection<any>('stagingWarehouseBalances').find({ warehouseId: STAGING_WAREHOUSE_ID })

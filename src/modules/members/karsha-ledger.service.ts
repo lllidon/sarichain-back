@@ -102,7 +102,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       const update: Record<string, unknown> = { $inc: { karshaBalance: amount }, $set: { updatedAt: now } };
       if (options.markOnboarding) update.$set = { updatedAt: now, onboardingKarshaAwardedAt: now };
       await this.members.updateOne({ _id: memberObjectId }, update, { session });
-      const transaction = { _id: new Types.ObjectId(), memberId: memberObjectId, lotId, type: 'credit',
+      const transaction = { _id: new Types.ObjectId(), memberId: memberObjectId, lotId, type: options.kind || 'credit',
         amount, balanceAfter: balance, reason: options.reason.trim(), actor: options.actor || null,
         idempotencyKey: options.idempotencyKey, createdAt: now, rateTomanPerKarsha: (await this.readPolicy()).rateTomanPerKarsha ?? null };
       await this.ledger.insertOne(transaction, { session });
@@ -218,15 +218,21 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       const difference = roundKarsha(balance - tracked);
       if (difference <= 1 / PRECISION) return;
       const now = new Date();
+      const lotId = existing?._id ?? new Types.ObjectId();
       if (existing) {
         await this.lots.updateOne({ _id: existing._id }, { $inc: { originalAmount: difference, remainingAmount: difference },
           $set: { updatedAt: now, status: 'active' } }, { session });
       } else {
-        await this.lots.insertOne({ _id: new Types.ObjectId(), memberId, source: 'legacy_migration',
+        await this.lots.insertOne({ _id: lotId, memberId, source: 'legacy_migration',
           legacyMigrationKey: memberId.toString(), originalAmount: difference, remainingAmount: difference,
           createdAt: now, anchorAt: now, decayPeriods: 0, nextDecayAt: addMonthiversary(now, 1),
           status: 'active', createdBy: 'system' }, { session });
       }
+      const policy = await this.readPolicy();
+      await this.ledger.insertOne({ _id: new Types.ObjectId(), memberId, lotId, type: 'migration',
+        amount: difference, balanceAfter: balance, reason: 'انتقال موجودی قبلی به دفتر کل کارسا',
+        actor: 'system', idempotencyKey: 'legacy-migration:' + memberId.toString() + ':' + now.getTime(),
+        createdAt: now, rateTomanPerKarsha: policy.rateTomanPerKarsha ?? null }, { session });
     });
   }
 

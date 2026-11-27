@@ -2,7 +2,7 @@ import { Connection, Types } from 'mongoose';
 
 interface OfferEntry {
   memberId: Types.ObjectId;
-  offer: { productId: Types.ObjectId; price: number; stock: number; reservedStock?: number; unit: string; harvestDate?: string };
+  offer: { productId: Types.ObjectId; price: number; stock: number; reservedStock?: number; unit: string; harvestDate?: string; locationId?: Types.ObjectId };
 }
 
 interface Producer {

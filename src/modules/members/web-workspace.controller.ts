@@ -211,7 +211,7 @@ export class WebWorkspaceController {
       );
       if (updated.matchedCount) {
         await this.connection.db!.collection('inventoryMovements').insertOne({
-          _id: 'seller-stock-import:' + String(id) + ':' + new Date().getTime(),
+          _id: 'seller-stock-import:' + String(id) + ':' + new Types.ObjectId().toString(),
           productId: String((await this.entries.findOne({ _id: id }, { projection: { 'offer.productId': 1 } }))?.offer?.productId ?? ''),
           sellerId: String(member._id), offerId: String(id), quantity: row.stock,
           stockAfter: row.stock, movementType: 'seller_stock_imported',

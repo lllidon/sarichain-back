@@ -1,6 +1,7 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
 import { Connection, Types } from 'mongoose';
+import { normalizePhone } from '../auth/phone';
 
 export interface OrderItemInput {
   productId: string;
@@ -18,6 +19,7 @@ export interface OrderItemInput {
 export interface OrderCreateInput {
   id: string;
   memberId: Types.ObjectId;
+  customerPhone?: string;
   signature: string;
   items: OrderItemInput[];
   subtotal: { min: number; max: number };
@@ -86,13 +88,37 @@ export class OrderPersistenceService {
 
     let orderNumber = existing?.orderNumber as string | undefined;
     if (!orderNumber) {
-      const year = new Date().getUTCFullYear();
+      // Use the Iranian (Jalali) calendar and Tehran's local date for customer-facing order numbers.
+      const dateParts = new Intl.DateTimeFormat('en-US-u-ca-persian-nu-latn', {
+        timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
+      }).formatToParts(new Date()).reduce<Record<string, string>>((parts, part) => {
+        if (part.type !== 'literal') parts[part.type] = part.value;
+        return parts;
+      }, {});
+      const year = dateParts.year?.slice(-2);
+      const month = dateParts.month?.padStart(2, '0');
+      const day = dateParts.day?.padStart(2, '0');
+      if (!year || !month || !day) throw new ConflictException('تاریخ سفارش برای تولید شماره سفارش قابل محاسبه نیست.');
+
+      const normalizedPhone = input.customerPhone ? normalizePhone(input.customerPhone) : '';
+      const customerCode = normalizedPhone ? normalizedPhone.slice(-2) : '00';
+      const dateCode = year + month + day;
+
+      // MongoDB Node driver versions differ: v5 returns ModifyResult.value (document),
+      // while newer versions return the updated document directly.
       const counterResult = await this.db.collection<any>('order_sequences').findOneAndUpdate(
-        { _id: 'orders:' + year }, { $inc: { value: 1 }, $setOnInsert: { createdAt: new Date() } },
+        { _id: 'orders:' + dateCode + ':' + customerCode },
+        { $inc: { value: 1 }, $setOnInsert: { createdAt: new Date() } },
         { upsert: true, returnDocument: 'after' },
       ) as any;
-      const counter = counterResult?.value ?? counterResult;
-      orderNumber = 'SC-' + year + '-' + String(counter.value).padStart(8, '0');
+      const counterDocument = counterResult?.value && typeof counterResult.value === 'object'
+        ? counterResult.value
+        : counterResult;
+      const sequence = Number(counterDocument?.value);
+      if (!Number.isSafeInteger(sequence) || sequence < 1) {
+        throw new ConflictException('شمارنده شماره سفارش به‌درستی تولید نشد.');
+      }
+      orderNumber = 'SC' + dateCode + customerCode + String(sequence).padStart(4, '0');
     }
 
     const now = new Date();

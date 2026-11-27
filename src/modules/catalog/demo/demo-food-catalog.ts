@@ -113,8 +113,13 @@ herbs: [
 
 export const demoProducts = demoProducers.flatMap((producer, producerIndex) => {
   const organization = producer[2], city = producer[5], group = producer[9];
-  return productSets[group].map((item, index) => {
-    const code = String(3001 + producerIndex * 10 + index);
+  const sellerProducts = productSets[group].flatMap(item => [
+    item,
+    [item[0] + ' درجه ممتاز', item[1], Math.round(item[2] * 1.12 / 1000) * 1000,
+      item[3], item[4] + '؛ سورت ممتاز', 'بسته ممتاز', item[6]] as const,
+  ]);
+  return sellerProducts.map((item, index) => {
+    const code = String(3001 + producerIndex * 20 + index);
     const price = Math.round(item[2] * (0.96 + (producerIndex % 7) * 0.015) / 1000) * 1000;
     return [code, item[0] + ' · ' + organization, item[1], price, item[3], item[4] + '؛ تولید ' + city, item[5], item[6], producerIndex] as const;
   });

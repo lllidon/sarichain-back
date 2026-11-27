@@ -9,34 +9,12 @@ import { ProductsService } from '../../products/products.service';
 import { Product } from '../../products/schemas/product.schema';
 import { demoProducts } from './demo-products';
 
-const demoBrands = [
-  ['sarv', 'سرو سبز', 'bio-boost'],
-  ['baran', 'کشت باران', 'fruit-pro'],
-  ['rooyesh', 'رویش مازندران', 'soil-life'],
-  ['aftab', 'طلوع آفتاب شمال', 'kelp'],
-] as const;
-
-const demoCategories = [
-  ['plant-nutrition', 'تغذیه گیاه', null, 'bio-boost'],
-  ['soil-care', 'مدیریت خاک', null, 'soil-life'],
-  ['biological-inputs', 'نهاده‌های زیستی', null, 'nitro-fix'],
-  ['biostimulants', 'محرک رشد', 'plant-nutrition', 'root-max'],
-  ['specialty', 'تغذیه تخصصی', 'plant-nutrition', 'amino-grow'],
-  ['soil-conditioners', 'بهبوددهنده خاک', 'soil-care', 'humic-acid'],
-  ['organic-amendments', 'مواد آلی خاک', 'soil-care', 'compost'],
-  ['biofertilizers', 'کود زیستی', 'biological-inputs', 'phos-bio'],
-  ['microbial-root', 'تغذیه میکروبی ریشه', 'biological-inputs', 'root-bio'],
-  ['vegetative', 'رشد رویشی', 'biostimulants', 'bio-boost'],
-  ['root-development', 'ریشه‌زایی', 'biostimulants', 'root-max'],
-  ['fruit-development', 'رشد میوه', 'biostimulants', 'fruit-pro'],
-  ['stress-tolerance', 'مقاومت به تنش', 'biostimulants', 'kelp'],
-  ['flowering', 'گل‌دهی', 'biostimulants', 'bloom'],
-] as const;
+import { demoBrands, demoCategories, demoProducts } from './demo-food-catalog';
 
 function images(image: string) {
   return {
-    imageUrl: `/catalog-demo/${image}.webp`,
-    thumbnailUrl: `/catalog-demo/${image}-thumb.webp`,
+    imageUrl: '/img/catalog/field.webp',
+    thumbnailUrl: '/img/catalog/field.webp',
   };
 }
 
@@ -75,7 +53,7 @@ export class CatalogDemoService {
     const database = this.productModel.db.db;
     if (!database) throw new Error('MongoDB is not connected.');
     const runs = database.collection<{ _id: string; completedAt: Date }>('catalog_seed_runs');
-    const runId = 'storefront-demo-v1';
+    const runId = 'food-market-demo-v2';
     if (await runs.findOne({ _id: runId })) return;
 
     const brandIds: Types.ObjectId[] = [];
@@ -85,7 +63,7 @@ export class CatalogDemoService {
         () => this.brandModel.findOne({ slug }).exec(),
         () => this.brands.create({
           slug, name, ...images(image),
-          shortDescription: 'برند نمونه کاتالوگ کشاورزی ساری چین',
+          shortDescription: 'تولیدکننده نمونه محصولات غذایی ساری‌چین',
         }),
       );
       brandIds.push(brand._id);

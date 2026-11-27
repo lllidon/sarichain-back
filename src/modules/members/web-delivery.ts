@@ -84,7 +84,7 @@ export async function quoteBasketDelivery(
   }, { projection: { name: 1, saleUnits: 1, physical: 1 } }).toArray() : [];
   const parentMap = new Map(parents.map(product => [String(product._id), product]));
 
-  type PickupGroup = { point: DeliveryPoint; label: string; weightKg: number; volumeM3: number; refrigerated: boolean; fragile: boolean };
+  type PickupGroup = { point: DeliveryPoint; label: string; weightKg: number; volumeM3: number; refrigerated: boolean; fragile: boolean; temperatureBand: string };
   const groups = new Map<string, PickupGroup>();
   let refrigerated = false;
   let fragile = false;
@@ -110,6 +110,7 @@ export async function quoteBasketDelivery(
     if (line.unitId && line.unitId !== 'unit' && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');
     const baseQuantity = line.quantity * (unit?.quantity ?? 1);
     if (!Number.isSafeInteger(baseQuantity)) throw new BadRequestException('تعداد واحدهای قابل حمل بیش از حد مجاز است.');
+    if (offer.stock < baseQuantity) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
     const dimensions = physical?.shippingDimensions;
     const unitVolume = dimensions
       ? dimensions.lengthMm * dimensions.widthMm * dimensions.heightMm / 1_000_000_000
@@ -130,10 +131,11 @@ export async function quoteBasketDelivery(
     totalVolumeM3 += volumeM3;
 
     const location = offer.pickupLocation;
-    const key = location.id;
+    const temperatureBand = cold ? `cold:${physical?.temperatureMinC ?? '*'}:${physical?.temperatureMaxC ?? '*'}` : 'ambient';
+    const key = location.id + ':' + temperatureBand;
     const current = groups.get(key) ?? {
       point: { latitude: location.latitude!, longitude: location.longitude! },
-      label: location.title || offer.name, weightKg: 0, volumeM3: 0, refrigerated: false, fragile: false,
+      label: location.title || offer.name, weightKg: 0, volumeM3: 0, refrigerated: false, fragile: false, temperatureBand,
     };
     current.weightKg += weightKg;
     current.volumeM3 += volumeM3;
@@ -144,8 +146,11 @@ export async function quoteBasketDelivery(
 
   const pickups = [...groups.values()];
   const destinationStop = stop('dropoff', 'مقصد مشتری', destination);
+  const temperatureBands = new Set(pickups.map(pickup => pickup.temperatureBand));
   const hubReady = tariffs.hubEnabled && Number.isFinite(tariffs.hubLatitude) &&
-    Number.isFinite(tariffs.hubLongitude);
+    Number.isFinite(tariffs.hubLongitude) && tariffs.hubMaxWeightKg > 0 && tariffs.hubMaxVolumeM3 > 0 &&
+    totalWeightKg <= tariffs.hubMaxWeightKg && totalVolumeM3 <= tariffs.hubMaxVolumeM3 &&
+    (!refrigerated || tariffs.hubSupportsRefrigeration) && temperatureBands.size === 1;
   const hub = hubReady ? { latitude: tariffs.hubLatitude!, longitude: tariffs.hubLongitude! } : null;
   const today = dateFormatter.format(now);
   const start = new Date(today + 'T12:00:00Z');

@@ -98,7 +98,7 @@ export class OrderPersistenceService {
     const now = new Date();
     const order = {
       _id: input.id, orderNumber, memberId: input.memberId, createdBy: input.memberId,
-      status: 'creating', currency: input.currency, subtotal: {
+      status: 'creating', inventoryStatus: 'not_reserved', currency: input.currency, subtotal: {
         min: moneyToMinor(input.subtotal.min), max: moneyToMinor(input.subtotal.max),
       }, total: moneyToMinor(input.total), price: {
         min: moneyToMinor(input.price.min), max: moneyToMinor(input.price.max),
@@ -130,6 +130,7 @@ export class OrderPersistenceService {
         $set: {
           shipping: input.delivery ? { method: input.delivery, status: 'pending' } : { status: 'not_requested' },
           payment: { method: 'unselected', status: 'pending', currency: input.currency },
+          inventory: { status: 'not_reserved', sourceWarehouseId: null, stagingWarehouseId: null },
           discounts: { total: 0, currency: input.currency, allocations: [] },
           accounting: { provider: null, externalDocumentId: null, syncStatus: 'not_synced' },
           extensions: {}, updatedAt: now, schemaVersion: 1,

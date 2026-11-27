@@ -53,7 +53,7 @@ The existing `transport_zone_tariffs` singleton stores the new parameters:
 - Refrigerated base charge and per-kilogram charge.
 - Fragile multiplier.
 - Hub enabled flag, coordinates, handling charge and per-kilogram charge.
-- Hub refrigeration capability and maximum weight/volume.
+- Hub refrigeration and fragile-handling capability, plus maximum weight/volume.
 
 Defaults keep the hub disabled and refrigerated surcharges at zero until management configures real operating costs and capacities.
 
@@ -62,7 +62,7 @@ Defaults keep the hub disabled and refrigerated surcharges at zero until managem
 1. Existing producer offers may not have a pickup location. Producers must assign a mapped orchard/warehouse location before those offers can be shipped using automatic quotes.
 2. Existing catalog products may not have physical specifications. Management must fill shipping weight or package dimensions; refrigeration and fragile flags should be reviewed.
 3. Management must configure the hub location, capacity and cold-chain capability before consolidation can be considered.
-4. Delivery dates are estimates, not capacity reservations. Driver availability, working hours, dispatch cutoffs, vehicle refrigeration certification and time-slot capacity must be connected before presenting these estimates as guaranteed commitments.
+4. Delivery dates are estimates, not capacity reservations. Same-day slots are filtered against Tehran local time. Driver availability, working hours, dispatch cutoffs, vehicle refrigeration certification and time-slot capacity must be connected before presenting these estimates as guaranteed commitments.
 5. A later optimization phase should add route matrix optimization, vehicle matching and shipment scheduling. The current hybrid comparison is a cost estimate over producer pickup groups, not a dispatch assignment.
 
 ## Implementation status

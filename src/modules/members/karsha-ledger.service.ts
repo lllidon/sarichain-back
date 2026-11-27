@@ -47,8 +47,13 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
   async readPolicy() {
     await this.policies.updateOne({ _id: 'default' }, { $setOnInsert: {
       _id: 'default', annualDecayRate: ANNUAL_DECAY_RATE, monthlyDecayRate: monthlyRate,
-      rateTomanPerKarsha: null, currency: 'TOMAN', createdAt: new Date(),
+      rateTomanPerKarsha: 100_000, currency: 'TOMAN', createdAt: new Date(),
     } }, { upsert: true });
+    // Establish the agreed default conversion without overwriting an explicitly configured rate.
+    await this.policies.updateOne(
+      { _id: 'default', $or: [{ rateTomanPerKarsha: null }, { rateTomanPerKarsha: { $exists: false } }] },
+      { $set: { rateTomanPerKarsha: 100_000, currency: 'TOMAN', updatedAt: new Date() } },
+    );
     const policy = await this.policies.findOne({ _id: 'default' });
     return { ...policy, annualDecayRate: ANNUAL_DECAY_RATE, monthlyDecayRate: monthlyRate };
   }

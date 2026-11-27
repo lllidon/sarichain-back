@@ -210,7 +210,7 @@ export class WebWorkspaceController {
         { $set: { 'offer.price': row.price, 'offer.stock': row.stock, updatedAt: new Date() } },
       );
       if (updated.matchedCount) {
-        await this.connection.db!.collection('inventoryMovements').insertOne({
+        await this.connection.db!.collection<any>('inventoryMovements').insertOne({
           _id: 'seller-stock-import:' + String(id) + ':' + new Types.ObjectId().toString(),
           productId: String((await this.entries.findOne({ _id: id }, { projection: { 'offer.productId': 1 } }))?.offer?.productId ?? ''),
           sellerId: String(member._id), offerId: String(id), quantity: row.stock,

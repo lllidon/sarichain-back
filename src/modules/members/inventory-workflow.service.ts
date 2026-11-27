@@ -131,6 +131,9 @@ export class InventoryWorkflowService {
             attempts: 0, createdAt: new Date(), schemaVersion: 1 } },
           { upsert: true, session },
         );
+        await this.db.collection('orderMeta').updateOne({ _id: orderId },
+          { $set: { 'inventory.status': 'staged', 'inventory.sourceWarehouseId': sourceWarehouseId,
+            'inventory.stagingWarehouseId': STAGING_WAREHOUSE_ID, updatedAt: new Date() } }, { session });
         await orders.updateOne({ _id: orderId }, { $set: { inventoryStatus: 'staged', updatedAt: new Date() } }, { session });
         await this.log(session, { orderId, stage: 'inventory.staging.completed', status: 'succeeded', actor, correlationId, details: { sourceWarehouseId, stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length } });
         result = { orderId, status: 'staged', stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length };
@@ -197,6 +200,8 @@ export class InventoryWorkflowService {
           { $set: { status: 'completed', externalDocumentId, completedAt: new Date(), updatedAt: new Date() } },
           { session },
         );
+        await this.db.collection('orderMeta').updateOne({ _id: orderId },
+          { $set: { 'inventory.status': 'posted_to_accounting', 'inventory.postedAt': new Date(), updatedAt: new Date() } }, { session });
         await orders.updateOne({ _id: orderId }, { $set: { inventoryStatus: 'posted_to_accounting', updatedAt: new Date() } }, { session });
         await this.log(session, { orderId, stage: 'accounting.posting.completed', status: 'succeeded', actor, correlationId, details: { externalDocumentId, lineCount: reservations.length } });
         result = { orderId, status: 'posted', externalDocumentId };

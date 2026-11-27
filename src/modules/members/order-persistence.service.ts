@@ -109,7 +109,7 @@ export class OrderPersistenceService {
           quantity: item.quantity, baseQuantity: item.baseQuantity, unitId: item.unitId,
           unitName: item.unitName, unitsPerPack: item.unitsPerPack,
           unitPrice: { min: unitPriceMin, max: unitPriceMax },
-          lineSubtotal: { min: unitPriceMin * item.baseQuantity, max: unitPriceMax * item.baseQuantity },
+          lineSubtotal: { min: moneyToMinor(item.price.min * item.baseQuantity), max: moneyToMinor(item.price.max * item.baseQuantity) },
           currency: input.currency, sellerName: item.sellerName,
           createdBy: input.memberId, createdAt: now, updatedAt: now, schemaVersion: 1,
         }, { upsert: true });
@@ -138,11 +138,31 @@ export class OrderPersistenceService {
     await this.ensureIndexes();
     const orders = this.db.collection('orders');
     const filter = { memberId, status: { $nin: ['completed', 'cancelled', 'creating'] } };
-    const [items, total] = await Promise.all([
+    const [headers, total] = await Promise.all([
       orders.find(filter, { projection: { signature: 0, memberId: 0 } })
         .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
     ]);
+    const ids = headers.map(order => String(order._id));
+    const [lines, metadata] = await Promise.all([
+      this.db.collection('orderItems').find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray(),
+      this.db.collection('orderMeta').find({ _id: { $in: ids } }).toArray(),
+    ]);
+    const byOrder = new Map<string, any[]>();
+    for (const line of lines) {
+      const key = String(line.orderId);
+      const group = byOrder.get(key) ?? [];
+      group.push({ ...line, unitPrice: { min: line.unitPrice.min / 1_000_000, max: line.unitPrice.max / 1_000_000 },
+        lineSubtotal: { min: line.lineSubtotal.min / 1_000_000, max: line.lineSubtotal.max / 1_000_000 } });
+      byOrder.set(key, group);
+    }
+    const metaByOrder = new Map(metadata.map(meta => [String(meta._id), meta]));
+    const items = headers.map(order => ({
+      ...order, total: order.total / 1_000_000,
+      subtotal: { min: order.subtotal.min / 1_000_000, max: order.subtotal.max / 1_000_000 },
+      price: { min: order.price.min / 1_000_000, max: order.price.max / 1_000_000 },
+      items: byOrder.get(String(order._id)) ?? [], meta: metaByOrder.get(String(order._id)),
+    }));
     return { items, total, page, limit };
   }
 

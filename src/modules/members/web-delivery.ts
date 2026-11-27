@@ -307,7 +307,7 @@ export function resolveDelivery(
     ...('routeMode' in method ? {
       routeMode: method.routeMode, routeLabel: method.routeLabel, distanceKm: method.distanceKm,
       routingPending: method.routingPending, refrigerated: method.refrigerated, fragile: method.fragile,
-      breakdown: method.breakdown,
+      breakdown: method.breakdown, defaultsApplied: method.defaultsApplied,
     } : {}),
   };
 }

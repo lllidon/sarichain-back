@@ -149,7 +149,7 @@ export async function quoteBasketDelivery(
   const pickups = [...groups.values()];
   const destinationStop = stop('dropoff', 'مقصد مشتری', destination);
   const temperatureBands = new Set(pickups.map(pickup => pickup.temperatureBand));
-  const hubReady = tariffs.hubEnabled && Number.isFinite(tariffs.hubLatitude) &&
+  const hubReady = pickups.length > 1 && tariffs.hubEnabled && Number.isFinite(tariffs.hubLatitude) &&
     Number.isFinite(tariffs.hubLongitude) && tariffs.hubMaxWeightKg > 0 && tariffs.hubMaxVolumeM3 > 0 &&
     totalWeightKg <= tariffs.hubMaxWeightKg && totalVolumeM3 <= tariffs.hubMaxVolumeM3 &&
     (!refrigerated || tariffs.hubSupportsRefrigeration) && temperatureBands.size === 1;
@@ -211,7 +211,9 @@ export async function quoteBasketDelivery(
       }
     }
 
-    const coldChainKar = refrigerated ? tariffs.refrigeratedBaseKar + coldWeightKg * tariffs.refrigeratedPerKgKar : 0;
+    const coldShipmentCount = pickups.filter(pickup => pickup.refrigerated).length;
+    const coldBaseCount = routeMode === 'hub' ? coldShipmentCount + 1 : coldShipmentCount;
+    const coldChainKar = refrigerated ? coldBaseCount * tariffs.refrigeratedBaseKar + coldWeightKg * tariffs.refrigeratedPerKgKar : 0;
     const adjustedTransport = selectedTransport * (fragile ? tariffs.fragileMultiplier : 1);
     const fee = roundKar(adjustedTransport + coldChainKar + handlingKar);
     const windows = Array.from({ length: 7 }, (_, index) => ({

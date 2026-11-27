@@ -30,6 +30,7 @@ class DeliveryDto {
   @ApiProperty() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) dispatchDate!: string;
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
+  @ApiProperty({ required: false }) @IsOptional() @IsString() @Matches(/^[a-zA-Z0-9-]{8,40}$/) addressId?: string;
   @ApiProperty({ type: DeliveryPointDto, required: false }) @IsOptional() @ValidateNested() @Type(() => DeliveryPointDto) destination?: DeliveryPointDto;
   @ApiProperty({ required: false }) @IsOptional() @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) quotedFee?: number;
   @ApiProperty({ enum: ['direct', 'hub'], required: false }) @IsOptional() @IsIn(['direct', 'hub']) quotedRouteMode?: 'direct' | 'hub';
@@ -104,9 +105,16 @@ export class WebOrdersController {
         productId: productId.toLowerCase(), quantity, ...(unitId && unitId !== 'unit' && { unitId }),
         ...(offerId && { offerId: offerId.toLowerCase() }),
       }));
+      const savedAddress = input.delivery?.addressId
+        ? member.deliveryAddresses?.find(address => address.id === input.delivery!.addressId) : undefined;
+      if (input.delivery?.addressId && (!savedAddress || savedAddress.latitude == null || savedAddress.longitude == null)) {
+        throw new BadRequestException('نشانی انتخاب‌شده معتبر نیست یا موقعیت جغرافیایی آن ثبت نشده است. از تنظیمات نشانی‌ها موقعیت را مشخص کنید.');
+      }
       const requestedDelivery = input.delivery && {
         method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot,
-        destination: input.delivery.destination, quotedFee: input.delivery.quotedFee,
+        addressId: input.delivery.addressId,
+        destination: savedAddress ? { latitude: savedAddress.latitude!, longitude: savedAddress.longitude! } : input.delivery.destination,
+        quotedFee: input.delivery.quotedFee,
         quotedRouteMode: input.delivery.quotedRouteMode, quotedDistanceKm: input.delivery.quotedDistanceKm,
       };
       const signature = JSON.stringify(requestedDelivery ? { items: request, delivery: requestedDelivery } : request);

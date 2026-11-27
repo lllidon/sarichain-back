@@ -90,6 +90,7 @@ export async function quoteBasketDelivery(
   let totalWeightKg = 0;
   let totalVolumeM3 = 0;
   let coldWeightKg = 0;
+  const offerQuantities = new Map<string, number>();
 
   for (const line of lines) {
     const product = productMap.get(line.productId.toLowerCase());
@@ -110,7 +111,10 @@ export async function quoteBasketDelivery(
     const sellerOffers = offers.get(line.productId.toLowerCase()) ?? [];
     const offerId = line.offerId?.toLowerCase();
     const offer = offerId ? sellerOffers.find(item => item.id === offerId) : sellerOffers.find(item => item.stock >= baseQuantity);
-    if (!offer || offer.stock < baseQuantity) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
+    if (!offer) throw new BadRequestException('عرضهٔ انتخاب‌شده در دسترس نیست.');
+    const offeredQuantity = (offerQuantities.get(offer.id) ?? 0) + baseQuantity;
+    if (offeredQuantity > offer.stock) throw new BadRequestException('موجودی عرضه برای تعداد درخواستی کافی نیست.');
+    offerQuantities.set(offer.id, offeredQuantity);
     if (!offer.pickupLocation || !Number.isFinite(offer.pickupLocation.latitude) || !Number.isFinite(offer.pickupLocation.longitude)) {
       throw new BadRequestException('برای یکی از عرضه‌کنندگان، موقعیت بارگیری روی نقشه ثبت نشده است.');
     }

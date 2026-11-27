@@ -18,6 +18,12 @@ export async function producerOffers(db: NonNullable<Connection['db']>, productI
   }, { projection: { memberId: 1, offer: 1 } }).sort({ createdAt: -1, _id: -1 }).toArray();
   if (!rows.length) return new Map<string, PublicOffer[]>();
 
+  const locationIds = rows.flatMap(row => row.offer.locationId ? [row.offer.locationId] : []);
+  const locationRows = locationIds.length ? await db.collection('web_workspace_entries').find({
+    _id: { $in: locationIds }, section: 'orchards',
+  }, { projection: { title: 1, 'location.latitude': 1, 'location.longitude': 1 } }).toArray() : [];
+  const locations = new Map(locationRows.map(location => [String(location._id), location]));
+
   const members = await db.collection<Producer>('members').find({
     _id: { $in: rows.map(row => row.memberId) }, isActive: { $ne: false }, producerType: { $type: 'string', $ne: '' },
   }, { projection: { fullName: 1, organization: 1, city: 1 } }).toArray();
@@ -36,6 +42,12 @@ export async function producerOffers(db: NonNullable<Connection['db']>, productI
       price: row.offer.price, stock: Math.max(0, row.offer.stock - (row.offer.reservedStock ?? 0)),
       totalStock: row.offer.stock, reservedStock: row.offer.reservedStock ?? 0,
       unit: row.offer.unit, harvestDate: row.offer.harvestDate,
+      ...(row.offer.locationId && locations.has(String(row.offer.locationId)) && {
+        pickupLocation: (() => {
+          const location = locations.get(String(row.offer.locationId))!;
+          return { id: String(location._id), title: location.title, latitude: location.location?.latitude, longitude: location.location?.longitude };
+        })(),
+      }),
     });
     grouped.set(productId, offers);
   }
@@ -54,4 +66,5 @@ interface PublicOffer {
   reservedStock: number;
   unit: string;
   harvestDate?: string;
+  pickupLocation?: { id: string; title?: string; latitude?: number; longitude?: number };
 }

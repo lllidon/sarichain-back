@@ -43,7 +43,14 @@ export class StoreOrdersController {
     const filter: Record<string, any> = { status: { $ne: 'creating' } };
     if (status === 'current') filter.status = { $in: ['pending', 'confirmed', 'processing', 'shipped'] };
     else if (status !== 'all') filter.status = status;
-    if (regex) filter.$or = [{ orderNumber: regex }, { 'customer.fullName': regex }, { 'customer.phone': regex }];
+    if (regex) {
+      const matchedMembers = await this.db.collection<any>('members').find(
+        { $or: [{ fullName: regex }, { phone: regex }, { organization: regex }] },
+        { projection: { _id: 1 } },
+      ).toArray();
+      filter.$or = [{ orderNumber: regex }, { memberId: { $in: matchedMembers.map(member => member._id) } },
+        { 'customer.fullName': regex }, { 'customer.phone': regex }];
+    }
     const orders = this.db.collection<any>('orders');
     const allFilter = { status: { $ne: 'creating' } };
     const [items, total, grouped] = await Promise.all([

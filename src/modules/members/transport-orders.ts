@@ -98,7 +98,7 @@ function zoneForDistance(distanceKm: number) {
   return zoneDefinitions.find(zone => distanceKm >= zone.minKm && (zone.maxKm === null || distanceKm < zone.maxKm || (zone.id === 'zone-4' && distanceKm <= zone.maxKm))) ?? zoneDefinitions[5];
 }
 async function roadLegKm(a: TransportStopDto, b: TransportStopDto): Promise<number | null> {
-  const base = process.env.ROUTING_SERVICE_URL?.replace(/\\/$/, '') || 'https://router.project-osrm.org';
+  const base = process.env.ROUTING_SERVICE_URL?.replace(/\/$/, '') || 'https://router.project-osrm.org';
   try {
     const response = await fetch(base + '/route/v1/driving/' + a.longitude + ',' + a.latitude + ';' + b.longitude + ',' + b.latitude + '?overview=false&alternatives=false&steps=false', { signal: AbortSignal.timeout(5000) });
     if (!response.ok) return null;

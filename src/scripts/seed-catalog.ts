@@ -222,6 +222,17 @@ async function main() {
       offers++;
     }
 
+    const seededProductIds = (await products.find({ sku: /^SC-3\\d{3}$/, kind: 'master' }, { projection: { _id: 1 } }).toArray()).map(row => row._id);
+    const publishedOffers = await workspace.countDocuments({
+      demoSeedKey: seedKey, section: 'products', 'offer.productId': { $in: seededProductIds },
+    });
+    const approvedProducers = await members.countDocuments({
+      demoSeedKey: seedKey, producerType: { $type: 'string', $ne: '' }, 'sellerReview.status': 'approved',
+    });
+    if (seededProductIds.length !== 200 || publishedOffers !== 200 || approvedProducers !== 20) {
+      throw new Error(`Demo catalog incomplete: products=${seededProductIds.length}, priced offers=${publishedOffers}, approved producers=${approvedProducers}. Refusing to report a successful seed.`);
+    }
+
     const counts = {
       customers: await members.countDocuments({ demoSeedKey: seedKey, customerType: { $exists: true } }),
       drivers: await members.countDocuments({ demoSeedKey: seedKey, serviceTypes: 'driver' }),

@@ -16,7 +16,7 @@
 4. Producer pickup location: coordinates from the location referenced by the offer.
 5. Admin tariff record: base, distance, billable weight, stop, minimum, speed multipliers, cold-chain, fragile, and hub parameters.
 
-If any line lacks usable physical data or a mapped pickup point, the quote endpoint returns a validation error rather than inventing weight, volume or origin coordinates.
+If weight is missing, the quote engine uses a clearly disclosed 1 kg per-sale-unit fallback. If package dimensions are missing, volume is estimated as weight divided by the configured standard density (default 250 kg/m³; at the 1 kg fallback this is 4 litres per unit). These fallback values are used only for freight estimation and are not written back as measured product specifications. A mapped pickup point is still required; origin coordinates are never invented.
 
 ## Hybrid route selection
 
@@ -60,7 +60,7 @@ Defaults keep the hub disabled and refrigerated surcharges at zero until managem
 ## Operational rollout requirements
 
 1. Existing producer offers may not have a pickup location. Producers can assign a mapped orchard/warehouse location to existing offers from the products dashboard; new offers require this location.
-2. Existing catalog products may not have physical specifications. Management must fill shipping weight or package dimensions; refrigeration and fragile flags should be reviewed.
+2. Existing catalog products may not have physical specifications. Management should fill actual shipping weight and package dimensions whenever possible; until then, the storefront discloses the 1 kg / density-based volume estimate. Refrigeration and fragile flags should be reviewed.
 3. Management must configure the hub location, capacity and cold-chain capability before consolidation can be considered.
 4. Delivery dates are estimates, not capacity reservations. Same-day slots are filtered against Tehran local time. Driver availability, working hours, dispatch cutoffs, vehicle refrigeration certification and time-slot capacity must be connected before presenting these estimates as guaranteed commitments.
 5. A later optimization phase should add route matrix optimization, vehicle matching and shipment scheduling. The current hybrid comparison is a cost estimate over producer pickup groups, not a dispatch assignment.

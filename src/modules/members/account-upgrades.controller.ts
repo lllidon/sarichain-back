@@ -193,6 +193,13 @@ export class AccountUpgradesController {
         });
       }
     }
+    if (input.status === 'approved') {
+      // Award the one-time customer onboarding credit after the first document review approval.
+      await this.members.updateOne(
+        { _id: row.memberId, onboardingKarshaAwardedAt: { $exists: false } },
+        { $inc: { karshaBalance: 1 }, $set: { onboardingKarshaAwardedAt: now, updatedAt: now } },
+      );
+    }
     await this.requests.updateOne({ _id: row._id, status: 'pending' }, {
       $set: { status: input.status, reviewNote: input.note?.trim() || '', reviewedAt: now, reviewedBy: request.userId, updatedAt: now },
     });

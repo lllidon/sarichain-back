@@ -51,6 +51,10 @@ class VehicleProfileDto {
   @IsOptional() @IsString() @MaxLength(500) description?: string;
 }
 
+class ProductOfferLocationDto {
+  @IsMongoId() locationId!: string;
+}
+
 class ProductOfferDto {
   @IsMongoId() productId!: string;
   @IsNumber({ maxDecimalPlaces: 4 }) @Min(0.0001) @Max(1_000_000) price!: number;
@@ -223,6 +227,25 @@ export class WebWorkspaceController {
         : { id: String(id), success: false, message: 'پیشنهاد فروش متعلق به این حساب نیست، وجود ندارد یا موجودی جدید از مقدار رزروشده کمتر است.' });
     }
     return { total: input.rows.length, updated: results.filter(row => row.success).length, results };
+  }
+
+  @Patch('products/offers/:id/location')
+  async updateOfferLocation(@Headers('authorization') authorization: string | undefined,
+    @Param('id') id: string, @Body() input: ProductOfferLocationDto) {
+    const member = await this.accounts.requireMember(authorization);
+    if (!member.producerType || member.sellerReview?.status !== 'approved') {
+      throw new ForbiddenException('دسترسی ویرایش عرضه برای این حساب تأیید نشده است.');
+    }
+    if (!isObjectIdOrHexString(id)) throw new NotFoundException();
+    const location = await this.entries.findOne({
+      _id: new Types.ObjectId(input.locationId), section: Section.Orchards, memberId: member._id,
+    }, { projection: { title: 1 } });
+    if (!location) throw new BadRequestException('موقعیت انتخاب‌شده معتبر نیست.');
+    const updated = await this.entries.updateOne({
+      _id: new Types.ObjectId(id), section: Section.Products, memberId: member._id,
+    }, { $set: { 'offer.locationId': location._id, 'offer.locationTitle': location.title, updatedAt: new Date() } });
+    if (!updated.matchedCount) throw new NotFoundException();
+    return { id, locationTitle: location.title };
   }
 
   @Post('products/offers')

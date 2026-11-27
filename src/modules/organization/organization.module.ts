@@ -9,7 +9,8 @@ import { organizationModels } from './organization.schemas';
 
 @Module({
   imports: [AuthModule, MongooseModule.forFeature(organizationModels)],
-  controllers: [OrganizationController, StoreOrdersController],
+  // Register the static store-orders routes before OrganizationController's dynamic :list routes.
+  controllers: [StoreOrdersController, OrganizationController],
   providers: [AccessTokenGuard, AdminGuard],
   exports: [MongooseModule],
 })

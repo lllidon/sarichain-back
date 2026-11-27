@@ -7,37 +7,12 @@ import { CategoriesService } from '../../categories/categories.service';
 import { Category } from '../../categories/schemas/category.schema';
 import { ProductsService } from '../../products/products.service';
 import { Product } from '../../products/schemas/product.schema';
-import { demoProducts } from './demo-products';
 
-const demoBrands = [
-  ['sarv', 'سرو سبز', 'bio-boost'],
-  ['baran', 'کشت باران', 'fruit-pro'],
-  ['rooyesh', 'رویش مازندران', 'soil-life'],
-  ['aftab', 'طلوع آفتاب شمال', 'kelp'],
-] as const;
-
-const demoCategories = [
-  ['plant-nutrition', 'تغذیه گیاه', null, 'bio-boost'],
-  ['soil-care', 'مدیریت خاک', null, 'soil-life'],
-  ['biological-inputs', 'نهاده‌های زیستی', null, 'nitro-fix'],
-  ['biostimulants', 'محرک رشد', 'plant-nutrition', 'root-max'],
-  ['specialty', 'تغذیه تخصصی', 'plant-nutrition', 'amino-grow'],
-  ['soil-conditioners', 'بهبوددهنده خاک', 'soil-care', 'humic-acid'],
-  ['organic-amendments', 'مواد آلی خاک', 'soil-care', 'compost'],
-  ['biofertilizers', 'کود زیستی', 'biological-inputs', 'phos-bio'],
-  ['microbial-root', 'تغذیه میکروبی ریشه', 'biological-inputs', 'root-bio'],
-  ['vegetative', 'رشد رویشی', 'biostimulants', 'bio-boost'],
-  ['root-development', 'ریشه‌زایی', 'biostimulants', 'root-max'],
-  ['fruit-development', 'رشد میوه', 'biostimulants', 'fruit-pro'],
-  ['stress-tolerance', 'مقاومت به تنش', 'biostimulants', 'kelp'],
-  ['flowering', 'گل‌دهی', 'biostimulants', 'bloom'],
-] as const;
+import { demoBrands, demoCategories, demoProducts, demoImageUrls } from './demo-food-catalog';
 
 function images(image: string) {
-  return {
-    imageUrl: `/catalog-demo/${image}.webp`,
-    thumbnailUrl: `/catalog-demo/${image}-thumb.webp`,
-  };
+  const imageUrl = demoImageUrls[image] ?? demoImageUrls.apple;
+  return { imageUrl, thumbnailUrl: imageUrl.replace('w=1000', 'w=360').replace('q=85', 'q=75') };
 }
 
 type RecordIdentity = { _id: Types.ObjectId };
@@ -75,8 +50,13 @@ export class CatalogDemoService {
     const database = this.productModel.db.db;
     if (!database) throw new Error('MongoDB is not connected.');
     const runs = database.collection<{ _id: string; completedAt: Date }>('catalog_seed_runs');
-    const runId = 'storefront-demo-v1';
+    const runId = 'food-market-demo-v4';
     if (await runs.findOne({ _id: runId })) return;
+
+    // Replace only records explicitly marked as demo data; leave real catalog records untouched.
+    await this.productModel.deleteMany({ slug: /^demo-/ });
+    await this.categoryModel.deleteMany({ slug: /^demo-/ });
+    await this.brandModel.deleteMany({ slug: /^demo-/ });
 
     const brandIds: Types.ObjectId[] = [];
     for (const [key, name, image] of demoBrands) {
@@ -85,7 +65,7 @@ export class CatalogDemoService {
         () => this.brandModel.findOne({ slug }).exec(),
         () => this.brands.create({
           slug, name, ...images(image),
-          shortDescription: 'برند نمونه کاتالوگ کشاورزی ساری چین',
+          shortDescription: 'تولیدکننده نمونه محصولات غذایی ساری‌چین',
         }),
       );
       brandIds.push(brand._id);
@@ -110,32 +90,21 @@ export class CatalogDemoService {
       if (!categoryId) throw new Error(`Missing demo category: ${category}`);
 
       const sku = `SC-${code}`;
-      const slug = `demo-${image}`;
+      const slug = `demo-product-${code}`;
       const shortDescription = `${form} · ${application}`;
       const master = await ensureRecord(
         () => this.productModel.findOne({ sku, slug, kind: 'master', categoryId }).exec(),
         () => this.products.createMaster({
           name, sku, slug, categoryId, brandId: brandIds[index % brandIds.length],
           ...images(image), shortDescription,
-          description: `${name} برای ${application}، به شکل ${form} و با قیمت پایه به ازای هر ${unit}.`,
+          description: `${name}؛ ${application}؛ بسته‌بندی: ${form}. قیمت نمونه اولیه به ازای هر ${unit}.`,
+          // Catalog records intentionally have no seller-facing price; only producer offers carry a sale price.\n          saleUnit: unit,
+          gallery: [demoImageUrls[image] ?? demoImageUrls.apple],
+          physical: { requiresRefrigeration: ['milk-cream', 'yogurt-doogh', 'cheese-butter', 'fish-seafood', 'freshwater-fish', 'chicken-turkey', 'eggs'].includes(String(category)), fragile: false },
           basePrice: { amount: price * 10, currency: 'IRR' },
         }),
       );
 
-      if (index < 10) {
-        const variantSku = `${sku}-P`;
-        const variantSlug = `${slug}-premium`;
-        const priceAdjustment = (Math.round(price * 1.12 / 1000) * 1000 - price) * 10;
-        await ensureRecord(
-          () => this.productModel.findOne({ sku: variantSku, slug: variantSlug, masterId: master._id }).exec(),
-          () => this.products.createVariant({
-            name: `${name} · ممتاز`, sku: variantSku, slug: variantSlug, masterId: master._id,
-            ...images(image), shortDescription,
-            priceAdjustment,
-            options: [{ name: 'درجه کیفی', value: 'ممتاز' }],
-          }),
-        );
-      }
     }
     await runs.updateOne({ _id: runId }, { $setOnInsert: { completedAt: new Date() } }, { upsert: true });
   }

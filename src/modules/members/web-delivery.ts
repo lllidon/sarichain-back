@@ -158,6 +158,10 @@ export async function quoteBasketDelivery(
   const start = new Date(today + 'T12:00:00Z');
 
   const results = await Promise.all(policies.map(async policy => {
+    const speedMultiplier = policy.speed === 'normal' ? tariffs.normalMultiplier
+      : policy.speed === 'special' ? tariffs.specialMultiplier
+      : policy.speed === 'express' ? tariffs.expressMultiplier : tariffs.urgentMultiplier;
+    const extraPickupKar = Math.max(0, pickups.length - 1) * tariffs.stopWeight * speedMultiplier;
     let directTransport = 0;
     let directDistance = 0;
     let directRoutingPending = false;
@@ -170,6 +174,7 @@ export async function quoteBasketDelivery(
       directDistance += quote.distanceKm;
       directRoutingPending ||= quote.routingPending;
     }
+    directTransport += extraPickupKar;
 
     let selectedTransport = directTransport;
     let selectedDistance = directDistance;
@@ -193,7 +198,7 @@ export async function quoteBasketDelivery(
         [stop('pickup', 'مرکز تجمیع ساری‌چین', hub), destinationStop],
         totalWeightKg, totalVolumeM3, policy.speed, tariffs,
       );
-      hubTransport += finalLeg.standardKar;
+      hubTransport += finalLeg.standardKar + extraPickupKar;
       hubDistance += finalLeg.distanceKm;
       hubRoutingPending ||= finalLeg.routingPending;
       const hubHandling = tariffs.hubHandlingKar + totalWeightKg * tariffs.hubPerKgKar;

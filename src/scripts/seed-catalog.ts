@@ -196,6 +196,9 @@ async function main() {
       });
     }
 
+    // Rebuild only this seed's offers so reruns cannot leave orphaned product references.
+    await workspace.deleteMany({ demoSeedKey: seedKey, section: 'products' });
+
     // Create one live seller offer for every producer-product pair (200 offers).
     let offers = 0;
     for (let i = 0; i < demoProducts.length; i++) {

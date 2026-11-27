@@ -57,7 +57,14 @@ export class InventoryWorkflowService {
 
   async getBalances(warehouseId: string) {
     await this.ensureIndexes();
-    return this.db.collection('warehouseBalances').find({ warehouseId }).sort({ productId: 1 }).toArray();
+    const rows = await this.db.collection('warehouseBalances').find({ warehouseId }).sort({ productId: 1 }).toArray();
+    return rows.map(row => ({ ...row, available: row.onHand - row.reserved }));
+  }
+
+  async getStagingBalances() {
+    await this.ensureIndexes();
+    return this.db.collection('stagingWarehouseBalances').find({ warehouseId: STAGING_WAREHOUSE_ID })
+      .sort({ productId: 1 }).toArray();
   }
 
   private async log(session: any, input: {

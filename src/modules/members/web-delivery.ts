@@ -106,9 +106,10 @@ export async function quoteBasketDelivery(
     }
     const physical = product.physical ?? parent?.physical;
     const units = (product.saleUnits?.length ? product.saleUnits : parent?.saleUnits) ?? [];
-    const unit = line.unitId ? units.find(item => item.code === line.unitId) : undefined;
-    if (line.unitId && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');
+    const unit = line.unitId && line.unitId !== 'unit' ? units.find(item => item.code === line.unitId) : undefined;
+    if (line.unitId && line.unitId !== 'unit' && !unit) throw new BadRequestException('واحد فروش یکی از محصولات معتبر نیست.');
     const baseQuantity = line.quantity * (unit?.quantity ?? 1);
+    if (!Number.isSafeInteger(baseQuantity)) throw new BadRequestException('تعداد واحدهای قابل حمل بیش از حد مجاز است.');
     const dimensions = physical?.shippingDimensions;
     const unitVolume = dimensions
       ? dimensions.lengthMm * dimensions.widthMm * dimensions.heightMm / 1_000_000_000
@@ -219,22 +220,10 @@ export async function quoteBasketDelivery(
   return results;
 }
 
-export function deliveryOptions(now = new Date()) {
-  const today = dateFormatter.format(now);
-  const start = new Date(today + 'T12:00:00Z');
-  return policies.map(policy => ({
-    id: policy.id, label: policy.label,
-    windows: Array.from({ length: 7 }, (_, index) => ({
-      dispatchDate: dayAt(start, index + 1),
-      deliveryDate: dayAt(start, index + 1 + policy.lead),
-    })),
-    slots: deliverySlots, fee: 0,
-  }));
-}
 
 export function resolveDelivery(
   input: { method: string; dispatchDate: string; slot: string },
-  options = deliveryOptions(),
+  options: BasketDeliveryQuote[],
 ) {
   const method = options.find(option => option.id === input.method);
   const slot = deliverySlots.find(option => option.id === input.slot);
@@ -242,5 +231,10 @@ export function resolveDelivery(
   if (!method || !slot || !window || !Number.isFinite(method.fee) || method.fee < 0) {
     throw new BadRequestException('روش یا زمان ارسال معتبر نیست. گزینه‌های ارسال را دوباره بررسی کنید.');
   }
-  return { ...input, date: window.deliveryDate, label: method.label, slotLabel: slot.label, fee: method.fee };
+  return {
+    ...input, date: window.deliveryDate, label: method.label, slotLabel: slot.label,
+    fee: method.fee, routeMode: method.routeMode, routeLabel: method.routeLabel,
+    distanceKm: method.distanceKm, routingPending: method.routingPending,
+    refrigerated: method.refrigerated, fragile: method.fragile, breakdown: method.breakdown,
+  };
 }

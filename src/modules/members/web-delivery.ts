@@ -151,7 +151,7 @@ export async function quoteBasketDelivery(
   const hubReady = pickups.length > 1 && tariffs.hubEnabled && Number.isFinite(tariffs.hubLatitude) &&
     Number.isFinite(tariffs.hubLongitude) && tariffs.hubMaxWeightKg > 0 && tariffs.hubMaxVolumeM3 > 0 &&
     totalWeightKg <= tariffs.hubMaxWeightKg && totalVolumeM3 <= tariffs.hubMaxVolumeM3 &&
-    (!refrigerated || tariffs.hubSupportsRefrigeration) && temperatureBands.size === 1;
+    (!refrigerated || tariffs.hubSupportsRefrigeration) && (!fragile || tariffs.hubSupportsFragile) && temperatureBands.size === 1;
   const hub = hubReady ? { latitude: tariffs.hubLatitude!, longitude: tariffs.hubLongitude! } : null;
   const today = dateFormatter.format(now);
   const start = new Date(today + 'T12:00:00Z');

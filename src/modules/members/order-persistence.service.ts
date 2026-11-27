@@ -176,33 +176,99 @@ export class OrderPersistenceService {
   async list(memberId: Types.ObjectId, page: number, limit: number) {
     await this.ensureIndexes();
     const orders = this.db.collection<any>('orders');
-    const filter = { memberId, status: { $nin: ['completed', 'cancelled', 'creating'] } };
-    const [headers, total] = await Promise.all([
+    const filter = { memberId, status: { $ne: 'creating' } };
+    const [headers, total, grouped] = await Promise.all([
       orders.find(filter, { projection: { signature: 0, memberId: 0 } })
         .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
       orders.countDocuments(filter),
+      orders.aggregate([
+        { $match: filter },
+        { $group: { _id: '$status', count: { $sum: 1 } } },
+      ]).toArray(),
     ]);
     const ids = headers.map(order => String(order._id));
-    const [lines, metadata] = await Promise.all([
-      this.db.collection<any>('orderItems').find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray(),
-      this.db.collection<any>('orderMeta').find({ _id: { $in: ids } }).toArray(),
-    ]);
+    const lines = ids.length ? await this.db.collection<any>('orderItems')
+      .find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray() : [];
+    const productIds = [...new Set(lines.map(line => String(line.productId)).filter(id => Types.ObjectId.isValid(id)))];
+    const products = productIds.length ? await this.db.collection<any>('products')
+      .find({ _id: { $in: productIds.map(id => new Types.ObjectId(id)) } },
+        { projection: { name: 1, imageUrl: 1, thumbnailUrl: 1, gallery: 1, sku: 1, saleUnit: 1 } }).toArray() : [];
+    const productById = new Map(products.map(product => [String(product._id), product]));
     const byOrder = new Map<string, any[]>();
     for (const line of lines) {
       const key = String(line.orderId);
       const group = byOrder.get(key) ?? [];
-      group.push({ ...line, unitPrice: { min: line.unitPrice.min / 1_000_000, max: line.unitPrice.max / 1_000_000 },
-        lineSubtotal: { min: line.lineSubtotal.min / 1_000_000, max: line.lineSubtotal.max / 1_000_000 } });
+      const product = productById.get(String(line.productId));
+      group.push({
+        ...line,
+        image: product?.thumbnailUrl || product?.imageUrl || product?.gallery?.[0] || null,
+        sku: product?.sku || null,
+        unitPrice: { min: line.unitPrice.min / 1_000_000, max: line.unitPrice.max / 1_000_000 },
+        lineSubtotal: { min: line.lineSubtotal.min / 1_000_000, max: line.lineSubtotal.max / 1_000_000 },
+      });
       byOrder.set(key, group);
     }
-    const metaByOrder = new Map(metadata.map(meta => [String(meta._id), meta]));
-    const items = headers.map(order => ({
-      ...order, total: order.total / 1_000_000,
-      subtotal: { min: order.subtotal.min / 1_000_000, max: order.subtotal.max / 1_000_000 },
-      price: { min: order.price.min / 1_000_000, max: order.price.max / 1_000_000 },
-      items: byOrder.get(String(order._id)) ?? [], meta: metaByOrder.get(String(order._id)),
-    }));
-    return { items, total, page, limit };
+    const counts = grouped.reduce((result, row) => {
+      result[row._id] = row.count;
+      return result;
+    }, {} as Record<string, number>);
+    const currentStatuses = ['pending', 'confirmed', 'awaiting_inventory', 'processing', 'shipped', 'in_transit', 'awaiting_delivery'];
+    const current = currentStatuses.reduce((sum, status) => sum + (counts[status] || 0), 0);
+    return {
+      items: headers.map(order => ({
+        ...order, total: order.total / 1_000_000,
+        subtotal: { min: order.subtotal.min / 1_000_000, max: order.subtotal.max / 1_000_000 },
+        price: { min: order.price.min / 1_000_000, max: order.price.max / 1_000_000 },
+        items: byOrder.get(String(order._id)) ?? [],
+      })),
+      counts: {
+        current, completed: counts.completed || 0,
+        returned: counts.returned || counts.refunded || 0,
+        cancelled: counts.cancelled || counts.canceled || 0,
+        total,
+      },
+      total, page, limit,
+    };
+  }
+
+  async getOrder(memberId: Types.ObjectId, orderId: string) {
+    await this.ensureIndexes();
+    const order = await this.db.collection<any>('orders').findOne({ _id: orderId, memberId },
+      { projection: { signature: 0, memberId: 0 } });
+    if (!order) return null;
+    const [lines, meta, events, logs] = await Promise.all([
+      this.db.collection<any>('orderItems').find({ orderId }).sort({ lineNumber: 1 }).toArray(),
+      this.db.collection<any>('orderMeta').findOne({ _id: orderId }),
+      this.db.collection<any>('orderEvents').find({ orderId }).sort({ occurredAt: 1, _id: 1 }).toArray(),
+      this.db.collection<any>('orderProcessingLogs').find({ orderId, status: 'succeeded' })
+        .sort({ occurredAt: 1, _id: 1 }).toArray(),
+    ]);
+    const productIds = [...new Set(lines.map(line => String(line.productId)).filter(id => Types.ObjectId.isValid(id)))];
+    const products = productIds.length ? await this.db.collection<any>('products')
+      .find({ _id: { $in: productIds.map(id => new Types.ObjectId(id)) } },
+        { projection: { name: 1, imageUrl: 1, thumbnailUrl: 1, gallery: 1, sku: 1, saleUnit: 1, description: 1, options: 1 } }).toArray() : [];
+    const productById = new Map(products.map(product => [String(product._id), product]));
+    const items = lines.map(line => {
+      const product = productById.get(String(line.productId));
+      return {
+        ...line,
+        image: product?.thumbnailUrl || product?.imageUrl || product?.gallery?.[0] || null,
+        sku: product?.sku || null,
+        specifications: product?.options || [],
+        unitPrice: { min: line.unitPrice.min / 1_000_000, max: line.unitPrice.max / 1_000_000 },
+        lineSubtotal: { min: line.lineSubtotal.min / 1_000_000, max: line.lineSubtotal.max / 1_000_000 },
+      };
+    });
+    const asMoney = (range: any) => range ? { min: range.min / 1_000_000, max: range.max / 1_000_000 } : undefined;
+    return {
+      ...order,
+      total: order.total / 1_000_000,
+      subtotal: asMoney(order.subtotal),
+      price: asMoney(order.price),
+      items, meta,
+      events: events.map(event => ({ type: event.type, fromStatus: event.fromStatus, toStatus: event.toStatus, occurredAt: event.occurredAt, payload: event.payload })),
+      timeline: logs.map(log => ({ stage: log.stage, occurredAt: log.occurredAt, details: log.details })),
+    };
   }
 
   private summary(order: any) {

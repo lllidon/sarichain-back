@@ -11,6 +11,7 @@ import { CartService } from '../cart/cart.service';
 import { producerOffers } from '../catalog/producer-offers';
 import { deliveryMethods, deliveryOptions, deliverySlots, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
+import { OrderPersistenceService } from './order-persistence.service';
 
 class OrderLineDto {
   @ApiProperty() @IsMongoId() productId!: string;
@@ -53,19 +54,13 @@ export class WebOrdersController {
     private readonly accounts: MarketplaceAccounts,
     private readonly cart: CartService,
     @InjectModel(Product.name) private readonly products: Model<Product>,
+    private readonly orderPersistence: OrderPersistenceService,
   ) {}
 
   @Get()
   async list(@Headers('authorization') authorization: string | undefined, @Query() { page, limit }: CatalogQueryDto) {
     const member = await this.accounts.requireMember(authorization);
-    const orders = this.products.db.db!.collection('web_orders');
-    const filter = { memberId: member._id, status: { $nin: ['completed', 'cancelled'] } };
-    const [items, total] = await Promise.all([
-      orders.find(filter, { projection: { signature: 0, memberId: 0 } })
-        .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),
-      orders.countDocuments(filter),
-    ]);
-    return { items, total, page, limit };
+    return this.orderPersistence.list(member._id, page, limit);
   }
 
   @Post()
@@ -80,14 +75,10 @@ export class WebOrdersController {
     const fromCart = input.cartRevision != null;
     const orderKey = fromCart ? 'cart:' + input.cartRevision : input.requestId;
     const id = createHash('sha256').update(member.id + ':' + orderKey).digest('hex');
-    const orders = this.products.db.db!.collection<{
-      _id: string; signature: string; total: number; currency: string; price?: PriceRange; subtotal?: PriceRange; delivery?: ReturnType<typeof resolveDelivery>;
-    }>('web_orders');
-    const existing = await orders.findOne({ _id: id });
+    const existing = await this.orderPersistence.findExisting(id, signature, member._id);
     if (existing) {
-      if (existing.signature !== signature) throw new ConflictException('این شناسه درخواست قبلاً استفاده شده است.');
       if (fromCart) await this.cart.clear(member._id, input.cartRevision);
-      return { id, total: existing.total, currency: existing.currency, price: existing.price, subtotal: existing.subtotal, delivery: existing.delivery };
+      return existing;
     }
 
     const checkout = fromCart ? await this.cart.checkout(member._id, input.cartRevision!, request) : null;
@@ -160,11 +151,12 @@ export class WebOrdersController {
     const subtotal = { min: min / 1_000_000, max: max / 1_000_000 };
     const price = { min: (min + shipping) / 1_000_000, max: (max + shipping) / 1_000_000 };
     const total = price.max;
-    const saved = await orders.findOneAndUpdate({ _id: id }, { $setOnInsert: {
-      memberId: member._id, signature, items, total, currency, price, subtotal, ...(delivery && { delivery }), status: 'pending', createdAt: new Date(),
-    } }, { upsert: true, returnDocument: 'after' });
-    if (!saved || saved.signature !== signature) throw new ConflictException('این شناسه درخواست قبلاً استفاده شده است.');
+    const saved = await this.orderPersistence.create({
+      id, memberId: member._id, signature, items, subtotal, price, total, currency: 'KAR',
+      ...(delivery && { delivery: delivery as unknown as Record<string, unknown> }),
+      source: { channel: 'web', requestId: input.requestId, ...(fromCart && { cartRevision: input.cartRevision }) },
+    });
     if (fromCart) await this.cart.clear(member._id, input.cartRevision);
-    return { id, total: saved.total, currency: saved.currency, price: saved.price, subtotal: saved.subtotal, delivery: saved.delivery };
+    return saved;
   }
 }

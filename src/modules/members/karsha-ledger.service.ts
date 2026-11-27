@@ -61,7 +61,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     const now = new Date();
     const fields: Record<string, unknown> = { annualDecayRate: ANNUAL_DECAY_RATE, monthlyDecayRate: monthlyRate, updatedAt: now };
     if (input.rateTomanPerKarsha !== undefined) fields.rateTomanPerKarsha = input.rateTomanPerKarsha;
-    await this.policies.updateOne({ _id: 'default' }, { $set: fields, $setOnInsert: { createdAt: now, currency: 'IRR' } }, { upsert: true });
+    await this.policies.updateOne({ _id: 'default' }, { $set: fields, $setOnInsert: { createdAt: now, currency: 'TOMAN' } }, { upsert: true });
     return this.readPolicy();
   }
 
@@ -128,15 +128,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       let lots = await this.lots.find({ memberId: memberObjectId, remainingAmount: { $gt: 0 } }, { session }).sort({ createdAt: 1, _id: 1 }).toArray();
       const lotBalance = roundKarsha(lots.reduce((sum, lot) => sum + Number(lot.remainingAmount || 0), 0));
       if (lotBalance + 1 / PRECISION < balanceBefore) {
-        const legacyAmount = roundKarsha(balanceBefore - lotBalance);
-        const anchor = member.createdAt ? new Date(member.createdAt) : new Date();
-        const now = new Date();
-        const legacyLot = { _id: new Types.ObjectId(), memberId: memberObjectId, source: 'legacy_migration',
-          originalAmount: legacyAmount, remainingAmount: legacyAmount, createdAt: anchor, anchorAt: anchor,
-          decayPeriods: 0, nextDecayAt: addMonthiversary(anchor, 1), status: 'active', createdBy: 'system' };
-        await this.lots.insertOne(legacyLot, { session });
-        lots.push(legacyLot);
-        lots.sort((a,b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        throw new ConflictException('موجودی و سهمیه‌های دفتر کل هم‌خوان نیستند؛ ابتدا تطبیق کیف پول انجام دهید.');
       }
       let remaining = amount;
       const allocations: Array<{ lotId: Types.ObjectId; amount: number }> = [];

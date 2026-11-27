@@ -12,109 +12,12 @@ export class InventoryWorkflowService {
 
   private async ensureIndexes() {
     await Promise.all([
-      this.db.collection<any>('warehouseBalances').createIndex({ warehouseId: 1, productId: 1 }, { unique: true, name: 'uq_warehouse_product_balance' }),
       this.db.collection<any>('inventoryReservations').createIndex({ orderId: 1, status: 1 }, { name: 'ix_inventory_reservations_order_status' }),
       this.db.collection<any>('inventoryMovements').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_inventory_movements_order_time' }),
       this.db.collection<any>('stagingWarehouseBalances').createIndex({ warehouseId: 1, productId: 1 }, { unique: true, name: 'uq_staging_product_balance' }),
       this.db.collection<any>('orderProcessingLogs').createIndex({ orderId: 1, occurredAt: 1 }, { name: 'ix_order_processing_logs_timeline' }),
       this.db.collection<any>('accountingOutbox').createIndex({ status: 1, createdAt: 1 }, { name: 'ix_accounting_outbox_status_created' }),
     ]);
-  }
-
-  async createWarehouse(input: { id: string; name: string; type: 'main' | 'staging'; actor: Actor }) {
-    await this.ensureIndexes();
-    if (!input.id.trim() || !input.name.trim()) throw new BadRequestException('شناسه و نام انبار الزامی است.');
-    if ((input.id === STAGING_WAREHOUSE_ID) !== (input.type === 'staging')) throw new BadRequestException('شناسه انبار واسط رزروشده است و فقط با نوع staging قابل استفاده است.');
-    const previous = await this.db.collection<any>('warehouses').findOne({ _id: input.id });
-    if (previous && (previous.type !== input.type || previous.name !== input.name.trim())) throw new ConflictException('مشخصات انبار موجود قابل تغییر نیست؛ شناسه دیگری انتخاب کنید.');
-    await this.db.collection<any>('warehouses').updateOne({ _id: input.id }, {
-      $setOnInsert: { name: input.name.trim(), type: input.type, isActive: true, createdAt: new Date(), createdBy: input.actor.id, schemaVersion: 1 },
-    }, { upsert: true });
-    return this.db.collection<any>('warehouses').findOne({ _id: input.id });
-  }
-
-  async setOpeningBalance(input: { warehouseId: string; productId: string; quantity: number; actor: Actor; correlationId: string }) {
-    await this.ensureIndexes();
-    if (!Number.isSafeInteger(input.quantity) || input.quantity < 0) throw new BadRequestException('موجودی اولیه باید عدد صحیح نامنفی باشد.');
-    const session = await this.connection.startSession();
-    try {
-      await session.withTransaction(async () => {
-        const warehouse = await this.db.collection<any>('warehouses').findOne({ _id: input.warehouseId, isActive: true }, { session });
-        if (!warehouse) throw new NotFoundException('انبار فعال پیدا نشد.');
-        const id = input.warehouseId + ':' + input.productId;
-        const existing = await this.db.collection<any>('warehouseBalances').findOne({ _id: id }, { session });
-        if (existing) throw new ConflictException('موجودی اولیه قبلاً ثبت شده است؛ برای اصلاح از سند تعدیل موجودی استفاده کنید.');
-        await this.db.collection<any>('warehouseBalances').insertOne({
-          _id: id, warehouseId: input.warehouseId, productId: input.productId,
-          onHand: input.quantity, reserved: 0, updatedAt: new Date(), createdAt: new Date(), schemaVersion: 1,
-        }, { session });
-        await this.db.collection<any>('inventoryMovements').insertOne({
-          _id: 'opening:' + id, productId: input.productId, quantity: input.quantity,
-          movementType: 'opening_balance', toWarehouseId: input.warehouseId,
-          actor: input.actor, correlationId: input.correlationId, occurredAt: new Date(), schemaVersion: 1,
-        }, { session });
-      });
-      return { warehouseId: input.warehouseId, productId: input.productId, onHand: input.quantity, reserved: 0 };
-    } finally { await session.endSession(); }
-  }
-
-  async getBalances(warehouseId: string) {
-    await this.ensureIndexes();
-    const rows = await this.db.collection<any>('warehouseBalances').find({ warehouseId }).sort({ productId: 1 }).toArray();
-    return rows.map(row => ({ ...row, available: row.onHand - row.reserved }));
-  }
-
-  async getProductStockSummary(search = '', page = 1, limit = 20) {
-    await this.ensureIndexes();
-    const safePage = Math.max(1, Math.floor(page));
-    const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
-    const escaped = [...search.trim()].map(char => '.^$*+?()[]{}|\\'.includes(char) ? '\\' + char : char).join('');
-    const pipeline: any[] = [
-      { $match: { section: 'products', 'offer.productId': { $exists: true } } },
-      { $sort: { createdAt: -1, _id: -1 } },
-      { $group: { _id: { productId: '$offer.productId', sellerId: '$memberId' }, entry: { $first: { _id: '$_id', memberId: '$memberId', offer: '$offer', createdAt: '$createdAt', updatedAt: '$updatedAt' } } } },
-      { $lookup: { from: 'products', localField: '_id.productId', foreignField: '_id', as: 'product' } },
-      { $unwind: '$product' },
-      { $lookup: { from: 'members', localField: '_id.sellerId', foreignField: '_id', as: 'seller' } },
-      { $unwind: '$seller' },
-      { $match: { 'seller.isActive': { $ne: false }, 'seller.producerType': { $type: 'string', $ne: '' } } },
-    ];
-    pipeline.push(
-      { $group: {
-        _id: '$product._id',
-        name: { $first: '$product.name' }, sku: { $first: '$product.sku' },
-        unit: { $first: '$entry.offer.unit' }, isActive: { $first: '$product.isActive' },
-        totalStock: { $sum: { $ifNull: ['$entry.offer.stock', 0] } },
-        reservedStock: { $sum: { $ifNull: ['$entry.offer.reservedStock', 0] } },
-        sellerCount: { $sum: 1 },
-        sellers: { $push: {
-          sellerId: '$_id.sellerId', name: { $ifNull: ['$seller.organization', '$seller.fullName'] },
-          city: '$seller.city', offerId: '$entry._id', price: '$entry.offer.price',
-          stock: { $ifNull: ['$entry.offer.stock', 0] },
-          reservedStock: { $ifNull: ['$entry.offer.reservedStock', 0] },
-          availableStock: { $subtract: [{ $ifNull: ['$entry.offer.stock', 0] }, { $ifNull: ['$entry.offer.reservedStock', 0] }] },
-          unit: '$entry.offer.unit', updatedAt: '$entry.updatedAt',
-        } },
-      } },
-      { $addFields: { availableStock: { $subtract: ['$totalStock', '$reservedStock'] } } },
-    );
-    if (escaped) pipeline.push({ $match: { $or: [
-      { name: new RegExp(escaped, 'i') }, { sku: new RegExp(escaped, 'i') },
-      { 'sellers.name': new RegExp(escaped, 'i') },
-    ] } });
-    pipeline.push(
-      { $sort: { name: 1, _id: 1 } },
-      { $facet: {
-        items: [{ $skip: (safePage - 1) * safeLimit }, { $limit: safeLimit }],
-        count: [{ $count: 'total' }],
-        totals: [{ $group: { _id: null, products: { $sum: 1 }, stock: { $sum: '$totalStock' }, available: { $sum: '$availableStock' }, sellers: { $sum: '$sellerCount' } } }],
-      } },
-    );
-    const [result] = await this.db.collection<any>('web_workspace_entries').aggregate(pipeline).toArray();
-    const totals = result?.totals?.[0] ?? { products: 0, stock: 0, available: 0, sellers: 0 };
-    return { items: result?.items ?? [], total: result?.count?.[0]?.total ?? 0,
-      page: safePage, limit: safeLimit, summary: { products: totals.products, totalStock: totals.stock,
-        availableStock: totals.available, sellerOffers: totals.sellers } };
   }
 
   async getStagingBalances() {

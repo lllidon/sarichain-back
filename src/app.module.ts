@@ -7,6 +7,7 @@ import { LocationsModule } from './modules/locations/locations.module';
 import { OrganizationModule } from './modules/organization/organization.module';
 import { MembersModule } from './modules/members/members.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { HomeSlidesModule } from './modules/home-slides/home-slides.module';
 import { validateEnvironment } from './config/environment';
 
 @Module({
@@ -24,6 +25,7 @@ import { validateEnvironment } from './config/environment';
     }),
     AuthModule,
     CatalogModule,
+    HomeSlidesModule,
     OrganizationModule,
     LocationsModule,
     MembersModule,

@@ -11,12 +11,21 @@
 ## Quote inputs
 
 1. Cart lines: product, offer, sale unit and quantity.
-2. Destination: customer-selected map coordinates.
+2. Destination: coordinates belonging to the customer's selected saved delivery address.
 3. Product physical metadata: shipping weight or package dimensions, optional standard density, refrigeration requirement, temperature interval and fragile flag.
 4. Producer pickup location: coordinates from the location referenced by the offer.
 5. Admin tariff record: base, distance, billable weight, stop, minimum, speed multipliers, cold-chain, fragile, and hub parameters.
 
 If weight is missing, the quote engine uses a clearly disclosed 1 kg per-sale-unit fallback. If package dimensions are missing, volume is estimated as weight divided by the configured standard density (default 250 kg/m³; at the 1 kg fallback this is 4 litres per unit). These fallback values are used only for freight estimation and are not written back as measured product specifications. A mapped pickup point is still required; origin coordinates are never invented.
+
+## Customer delivery address book
+
+- A marketplace customer can save up to 20 delivery addresses on their own member profile. Each entry stores a stable ID, title, recipient/contact details, postal address and optional latitude/longitude.
+- Address editing and map pin selection live in account profile settings (`/partners?section=profile`), not in the cart.
+- The cart loads the signed-in customer's saved addresses and displays only an address selector and read-only address summary. It does not render a map or accept ad-hoc coordinates.
+- A saved address without both coordinates cannot produce a shipping quote or be used for checkout. The customer must edit that address in profile settings and set its delivery point on the map.
+- Quote requests use the selected saved address coordinates. At checkout the backend resolves `addressId` against the authenticated member's saved addresses and uses stored coordinates rather than trusting client-supplied coordinates.
+- The selected address ID is included in the order delivery snapshot for later fulfilment.
 
 ## Hybrid route selection
 
@@ -43,7 +52,7 @@ All prices are calculated and rounded on the backend. At checkout, the backend r
 ## API contract
 
 - `POST /web/delivery-options`: accepts `items[]` and `destination{latitude,longitude}`; returns the four computed options and their price breakdown, route mode, distance and date windows.
-- `POST /web/orders`: delivery selection includes method, dispatch date, slot, destination and the quote snapshot (`quotedFee`, `quotedRouteMode`, `quotedDistanceKm`). The backend recomputes before persistence.
+- `POST /web/orders`: delivery selection includes method, dispatch date, slot, saved `addressId` and the quote snapshot; the backend resolves destination coordinates from the authenticated customer's address book (`quotedFee`, `quotedRouteMode`, `quotedDistanceKm`). The backend recomputes before persistence.
 - `GET /web/delivery-options` retains the previous three fixed-fee methods for old storefront clients during staged rollout. The updated cart uses `POST` for cart-specific quotes. Legacy order submissions without destination coordinates remain accepted; new quote-backed orders are revalidated.
 
 ## Admin configuration

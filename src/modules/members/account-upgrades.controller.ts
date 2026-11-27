@@ -140,8 +140,18 @@ export class AccountUpgradesController {
     await this.requests.createIndex({ memberId: 1, kind: 1 }, {
       unique: true, partialFilterExpression: { status: 'pending' }, name: 'uniq_pending_member_upgrade_kind',
     });
-    if (await this.requests.findOne({ memberId: member._id, kind, status: 'pending' })) {
-      throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
+    const existingPending = await this.requests.findOne({ memberId: member._id, kind, status: 'pending' });
+    if (existingPending) {
+      if (kind !== 'producer_categories') {
+        throw new BadRequestException('برای این نوع ارتقا، درخواست در حال بررسی دارید.');
+      }
+      const mergedIds = [...new Set([...(existingPending.requestedCategoryIds || []), ...requestedCategoryIds])];
+      if (mergedIds.length > 20) throw new BadRequestException('در هر درخواست حداکثر ۲۰ دسته‌بندی قابل انتخاب است.');
+      const mergedLabels = [...new Set([...(existingPending.requestedCategoryLabels || []), ...requestedCategoryLabels])];
+      await this.requests.updateOne({ _id: existingPending._id, status: 'pending' }, {
+        $set: { requestedCategoryIds: mergedIds, requestedCategoryLabels: mergedLabels, updatedAt: new Date() },
+      });
+      return { id: existingPending._id, status: 'pending', updated: true };
     }
     const now = new Date();
     const record = {

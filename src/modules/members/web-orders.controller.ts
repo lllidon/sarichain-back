@@ -75,13 +75,16 @@ export class WebOrdersController {
     const fromCart = input.cartRevision != null;
     const orderKey = fromCart ? 'cart:' + input.cartRevision : input.requestId;
     const id = createHash('sha256').update(member.id + ':' + orderKey).digest('hex');
+    await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.request.received', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { itemCount: request.length, fromCart } });
     const existing = await this.orderPersistence.findExisting(id, signature, member._id);
     if (existing) {
+      await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.idempotency.replayed', status: 'succeeded', actorId: member._id, correlationId: input.requestId });
       if (fromCart) await this.cart.clear(member._id, input.cartRevision);
       return existing;
     }
 
     const checkout = fromCart ? await this.cart.checkout(member._id, input.cartRevision!, request) : null;
+    await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.cart.validated', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { cartRevision: input.cartRevision } });
     const records = await this.products.find({
       _id: { $in: request.map(item => item.productId) }, isActive: true,
     }).select('name saleUnit saleUnits maxOrderQuantity kind masterId').lean();
@@ -138,6 +141,7 @@ export class WebOrdersController {
         price: { min: offer.price, max: offer.price }, offerId: offer.id, sellerId: offer.sellerId, sellerName: offer.name,
       };
     });
+    await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.products.validated', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { itemCount: items.length } });
     const delivery = requestedDelivery ? resolveDelivery(requestedDelivery) : undefined;
     const currency = 'KAR';
     const sum = (bound: keyof PriceRange) => items.reduce((total, item) =>
@@ -156,7 +160,11 @@ export class WebOrdersController {
       ...(delivery && { delivery: delivery as unknown as Record<string, unknown> }),
       source: { channel: 'web', requestId: input.requestId, ...(fromCart && { cartRevision: input.cartRevision }) },
     });
-    if (fromCart) await this.cart.clear(member._id, input.cartRevision);
+    await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.order.persisted', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { status: saved.status } });
+    if (fromCart) {
+      await this.cart.clear(member._id, input.cartRevision);
+      await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.cart.cleared', status: 'succeeded', actorId: member._id, correlationId: input.requestId });
+    }
     return saved;
   }
 }

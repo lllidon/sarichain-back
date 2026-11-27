@@ -37,22 +37,22 @@ export class Money {
 
 @Schema({ _id: false, strict: 'throw' })
 export class ShippingDimensions {
-  @Prop({ required: true, validate: positive })
+  @Prop({ required: true, min: Number.MIN_VALUE, max: 100_000 })
   lengthMm!: number;
 
-  @Prop({ required: true, validate: positive })
+  @Prop({ required: true, min: Number.MIN_VALUE, max: 100_000 })
   widthMm!: number;
 
-  @Prop({ required: true, validate: positive })
+  @Prop({ required: true, min: Number.MIN_VALUE, max: 100_000 })
   heightMm!: number;
 }
 
 @Schema({ _id: false, strict: 'throw' })
 export class PhysicalSpecifications {
-  @Prop({ validate: positive })
+  @Prop({ min: Number.MIN_VALUE, max: 10_000 })
   standardDensityKgM3?: number;
 
-  @Prop({ validate: positive })
+  @Prop({ min: Number.MIN_VALUE, max: 100_000_000 })
   shippingWeightG?: number;
 
   @Prop({ type: Boolean, default: false })

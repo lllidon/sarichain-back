@@ -167,6 +167,66 @@ export class InventoryWorkflowService {
     }
   }
 
+  async releaseStagedOrder(orderId: string, reason: string, actor: Actor, correlationId: string) {
+    if (!reason?.trim()) throw new BadRequestException('علت آزادسازی رزرو الزامی است.');
+    await this.ensureIndexes();
+    const session = await this.connection.startSession();
+    try {
+      let result: any;
+      await session.withTransaction(async () => {
+        const order = await this.db.collection('orders').findOne({ _id: orderId }, { session });
+        if (!order) throw new NotFoundException('سفارش پیدا نشد.');
+        if (order.inventoryStatus === 'posted_to_accounting') {
+          throw new ConflictException('سفارش ثبت‌شده در حسابداری قابل آزادسازی رزرو نیست؛ باید سند برگشت یا اصلاح صادر شود.');
+        }
+        const rows = await this.db.collection('inventoryReservations').find({ orderId, status: 'staged' }, { session }).toArray();
+        if (!rows.length) {
+          if (order.inventoryStatus === 'released' || order.inventoryStatus === 'not_reserved') {
+            result = { orderId, status: order.inventoryStatus, idempotent: true };
+            return;
+          }
+          throw new ConflictException('رزرو فعال برای این سفارش پیدا نشد.');
+        }
+        await this.log(session, { orderId, stage: 'inventory.reservation_release.started', status: 'started', actor, correlationId, details: { reason } });
+        for (const row of rows) {
+          const source = await this.db.collection('warehouseBalances').updateOne(
+            { _id: row.sourceWarehouseId + ':' + row.productId, reserved: { $gte: row.quantity } },
+            { $inc: { reserved: -row.quantity }, $set: { updatedAt: new Date() } }, { session },
+          );
+          if (!source.modifiedCount) throw new ConflictException('مقدار رزرو انبار اصلی با سوابق مغایرت دارد.');
+          const staging = await this.db.collection('stagingWarehouseBalances').updateOne(
+            { _id: row.stagingWarehouseId + ':' + row.productId, quantity: { $gte: row.quantity }, pendingAccounting: { $gte: row.quantity } },
+            { $inc: { quantity: -row.quantity, pendingAccounting: -row.quantity }, $set: { updatedAt: new Date() } }, { session },
+          );
+          if (!staging.modifiedCount) throw new ConflictException('موجودی انبار واسط با سوابق رزرو مغایرت دارد.');
+          await this.db.collection('inventoryReservations').updateOne({ _id: row._id, status: 'staged' },
+            { $set: { status: 'released', releasedAt: new Date(), releaseReason: reason, updatedAt: new Date() } }, { session });
+          await this.db.collection('inventoryMovements').insertOne({
+            _id: row._id + ':released', orderId, orderItemId: row.orderItemId,
+            productId: row.productId, quantity: row.quantity, movementType: 'release_reservation',
+            fromWarehouseId: row.stagingWarehouseId, toWarehouseId: row.sourceWarehouseId,
+            actor, correlationId, reason, occurredAt: new Date(), schemaVersion: 1,
+          }, { session });
+        }
+        await this.db.collection('accountingOutbox').updateOne({ _id: 'order:' + orderId },
+          { $set: { status: 'cancelled', cancelledAt: new Date(), cancellationReason: reason, updatedAt: new Date() } }, { session });
+        await this.db.collection('orderMeta').updateOne({ _id: orderId },
+          { $set: { 'inventory.status': 'released', 'inventory.releaseReason': reason, updatedAt: new Date() } }, { session });
+        await this.db.collection('orders').updateOne({ _id: orderId },
+          { $set: { inventoryStatus: 'released', updatedAt: new Date() } }, { session });
+        await this.log(session, { orderId, stage: 'inventory.reservation_release.completed', status: 'succeeded', actor, correlationId, details: { reason, lineCount: rows.length } });
+        result = { orderId, status: 'released', lineCount: rows.length };
+      });
+      return result;
+    } catch (error: any) {
+      await this.db.collection('orderProcessingLogs').insertOne({
+        orderId, stage: 'inventory.reservation_release.failed', status: 'failed', actor, correlationId,
+        error: String(error?.message ?? error), occurredAt: new Date(), schemaVersion: 1,
+      }).catch(() => undefined);
+      throw error;
+    } finally { await session.endSession(); }
+  }
+
   async confirmAccountingPosting(orderId: string, externalDocumentId: string, actor: Actor, correlationId: string) {
     if (!externalDocumentId?.trim()) throw new BadRequestException('شناسه سند حسابداری الزامی است.');
     await this.ensureIndexes();

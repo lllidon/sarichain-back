@@ -50,7 +50,7 @@ export class CatalogDemoService {
     const database = this.productModel.db.db;
     if (!database) throw new Error('MongoDB is not connected.');
     const runs = database.collection<{ _id: string; completedAt: Date }>('catalog_seed_runs');
-    const runId = 'food-market-demo-v3';
+    const runId = 'food-market-demo-v4';
     if (await runs.findOne({ _id: runId })) return;
 
     // Replace only records explicitly marked as demo data; leave real catalog records untouched.
@@ -98,7 +98,7 @@ export class CatalogDemoService {
           name, sku, slug, categoryId, brandId: brandIds[index % brandIds.length],
           ...images(image), shortDescription,
           description: `${name}؛ ${application}؛ بسته‌بندی: ${form}. قیمت نمونه اولیه به ازای هر ${unit}.`,
-          price: { min: price, max: price }, saleUnit: unit,
+          // Catalog records intentionally have no seller-facing price; only producer offers carry a sale price.\n          saleUnit: unit,
           gallery: [demoImageUrls[image] ?? demoImageUrls.apple],
           physical: { requiresRefrigeration: ['milk-cream', 'yogurt-doogh', 'cheese-butter', 'fish-seafood', 'freshwater-fish', 'chicken-turkey', 'eggs'].includes(String(category)), fragile: false },
           basePrice: { amount: price * 10, currency: 'IRR' },

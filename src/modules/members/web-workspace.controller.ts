@@ -57,7 +57,7 @@ class ProductOfferDto {
   @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(1_000_000_000) stock!: number;
   @IsOptional() @Matches(/^\d{4}-\d{2}-\d{2}$/) @IsDateString({ strict: true }) harvestDate?: string;
   @IsOptional() @IsString() @MaxLength(1000) notes?: string;
-  @IsOptional() @IsMongoId() locationId?: string;
+  @IsMongoId() locationId!: string;
 }
 
 const locationTypes = ['orchard', 'farmland', 'greenhouse', 'nursery', 'warehouse', 'other'] as const;

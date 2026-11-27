@@ -11,10 +11,10 @@ export const deliverySlots = [
 ] as const;
 
 const policies = [
-  { id: 'economy', label: 'ارسال اقتصادی', lead: 4, speed: 'normal' },
-  { id: 'standard', label: 'ارسال عادی', lead: 2, speed: 'special' },
-  { id: 'express', label: 'ارسال سریع', lead: 1, speed: 'express' },
-  { id: 'urgent', label: 'ارسال فوری', lead: 0, speed: 'urgent' },
+  { id: 'economy', label: 'ارسال اقتصادی', lead: 4, dispatchOffset: 1, speed: 'normal' },
+  { id: 'standard', label: 'ارسال عادی', lead: 2, dispatchOffset: 1, speed: 'special' },
+  { id: 'express', label: 'ارسال سریع', lead: 1, dispatchOffset: 0, speed: 'express' },
+  { id: 'urgent', label: 'ارسال فوری', lead: 0, dispatchOffset: 0, speed: 'urgent' },
 ] as const;
 const dateFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Tehran', year: 'numeric', month: '2-digit', day: '2-digit',
@@ -199,15 +199,12 @@ export async function quoteBasketDelivery(
       }
     }
 
-    const speedMultiplier = policy.speed === 'normal' ? tariffs.normalMultiplier
-      : policy.speed === 'special' ? tariffs.specialMultiplier
-      : policy.speed === 'express' ? tariffs.expressMultiplier : tariffs.urgentMultiplier;
     const coldChainKar = refrigerated ? tariffs.refrigeratedBaseKar + coldWeightKg * tariffs.refrigeratedPerKgKar : 0;
     const adjustedTransport = selectedTransport * (fragile ? tariffs.fragileMultiplier : 1);
     const fee = roundKar(adjustedTransport + coldChainKar + handlingKar);
     const windows = Array.from({ length: 7 }, (_, index) => ({
-      dispatchDate: dayAt(start, index + 1),
-      deliveryDate: dayAt(start, index + 1 + policy.lead),
+      dispatchDate: dayAt(start, index + policy.dispatchOffset),
+      deliveryDate: dayAt(start, index + policy.dispatchOffset + policy.lead),
     }));
     return {
       id: policy.id, label: policy.label, fee, windows, slots: deliverySlots,

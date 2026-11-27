@@ -1,6 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean } from 'class-validator';
-import { ArrayMaxSize, ArrayMinSize, IsArray, IsDateString, IsIn, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsDateString, IsIn, IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 
 export const transportUrgencies = ['normal', 'special', 'express', 'urgent'] as const;
 export const transportCategories = ['intracity', 'intercity', 'interprovincial'] as const;

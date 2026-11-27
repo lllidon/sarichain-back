@@ -1,6 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Types } from 'mongoose';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { SellerFulfillmentService } from './seller-fulfillment.service';
 

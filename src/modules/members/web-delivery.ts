@@ -162,6 +162,8 @@ export async function quoteBasketDelivery(
       : policy.speed === 'special' ? tariffs.specialMultiplier
       : policy.speed === 'express' ? tariffs.expressMultiplier : tariffs.urgentMultiplier;
     const extraPickupKar = Math.max(0, pickups.length - 1) * tariffs.stopWeight * speedMultiplier;
+    const coldShipmentCount = pickups.filter(pickup => pickup.refrigerated).length;
+    const directColdBase = refrigerated ? coldShipmentCount * tariffs.refrigeratedBaseKar : 0;
     let directTransport = 0;
     let directDistance = 0;
     let directRoutingPending = false;
@@ -202,7 +204,8 @@ export async function quoteBasketDelivery(
       hubDistance += finalLeg.distanceKm;
       hubRoutingPending ||= finalLeg.routingPending;
       const hubHandling = tariffs.hubHandlingKar + totalWeightKg * tariffs.hubPerKgKar;
-      if (hubTransport + hubHandling < directTransport) {
+      const hubColdBase = refrigerated ? (coldShipmentCount + 1) * tariffs.refrigeratedBaseKar : 0;
+      if (hubTransport + hubHandling + hubColdBase < directTransport + directColdBase) {
         selectedTransport = hubTransport;
         selectedDistance = hubDistance;
         routingPending = hubRoutingPending;
@@ -211,7 +214,6 @@ export async function quoteBasketDelivery(
       }
     }
 
-    const coldShipmentCount = pickups.filter(pickup => pickup.refrigerated).length;
     const coldBaseCount = routeMode === 'hub' ? coldShipmentCount + 1 : coldShipmentCount;
     const coldChainKar = refrigerated ? coldBaseCount * tariffs.refrigeratedBaseKar + coldWeightKg * tariffs.refrigeratedPerKgKar : 0;
     const adjustedTransport = selectedTransport * (fragile ? tariffs.fragileMultiplier : 1);

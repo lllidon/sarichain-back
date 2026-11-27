@@ -223,7 +223,7 @@ export async function quoteBasketDelivery(
       const dispatchDate = dayAt(start, index + policy.dispatchOffset);
       const slots = dispatchDate === today
         ? deliverySlots.filter(slot => slotStartHour[slot.id] > currentHour)
-        : deliverySlots;
+        : [...deliverySlots];
       return { dispatchDate, deliveryDate: dayAt(start, index + policy.dispatchOffset + policy.lead), slots };
     });
     return {

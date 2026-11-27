@@ -68,7 +68,7 @@ async function main() {
     if (!db) throw new Error('MongoDB is not connected.');
 
     const members = db.collection('members');
-    const phoneRegistry = db.collection('member_phones');
+    const phoneRegistry = db.collection<{ _id: string; memberId: string; group: string }>('member_phones');
     const products = db.collection('products');
     const workspace = db.collection('web_workspace_entries');
     const password = process.env.DEMO_MEMBER_PASSWORD || 'SarichainDemo#1405';
@@ -83,8 +83,8 @@ async function main() {
       const phone = String(profile.phone);
       const current = await members.findOne({ phone });
       if (current && current.demoSeedKey !== seedKey) throw new Error('Demo phone is already used by a non-demo account: ' + phone);
-      const registered = await phoneRegistry.findOne({ _id: phone });
-      if (registered && (!current || registered.memberId !== String(current._id))) {
+      const registeredBefore = await phoneRegistry.findOne({ _id: phone });
+      if (registeredBefore && (!current || registeredBefore.memberId !== String(current._id))) {
         throw new Error('Demo phone is already reserved by another account: ' + phone);
       }
       const _id = new Types.ObjectId();
@@ -96,8 +96,8 @@ async function main() {
       );
       const member = await members.findOne({ phone, demoSeedKey: seedKey });
       if (!member) throw new Error('Could not create demo member: ' + phone);
-      const registered = await phoneRegistry.findOne({ _id: phone });
-      if (registered && registered.memberId !== String(member._id)) {
+      const registeredAfter = await phoneRegistry.findOne({ _id: phone });
+      if (registeredAfter && registeredAfter.memberId !== String(member._id)) {
         throw new Error('Demo phone is already reserved by another account: ' + phone);
       }
       await phoneRegistry.updateOne(

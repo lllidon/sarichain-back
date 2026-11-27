@@ -235,6 +235,16 @@ export class InventoryWorkflowService {
     }
   }
 
+  async getMovements(filters: { orderId?: string; productId?: string; warehouseId?: string; limit?: number }) {
+    await this.ensureIndexes();
+    const query: Record<string, unknown> = {};
+    if (filters.orderId) query.orderId = filters.orderId;
+    if (filters.productId) query.productId = filters.productId;
+    if (filters.warehouseId) query.$or = [{ fromWarehouseId: filters.warehouseId }, { toWarehouseId: filters.warehouseId }];
+    const limit = Math.min(Math.max(filters.limit ?? 100, 1), 500);
+    return this.db.collection('inventoryMovements').find(query).sort({ occurredAt: -1, _id: -1 }).limit(limit).toArray();
+  }
+
   async getOrderLogs(orderId: string) {
     return this.db.collection('orderProcessingLogs').find({ orderId }).sort({ occurredAt: 1, _id: 1 }).toArray();
   }

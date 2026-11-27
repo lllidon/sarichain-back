@@ -130,7 +130,7 @@ export class OrderPersistenceService {
         $set: {
           shipping: input.delivery ? { method: input.delivery, status: 'pending' } : { status: 'not_requested' },
           payment: { method: 'unselected', status: 'pending', currency: input.currency },
-          inventory: { status: 'not_reserved', sourceWarehouseId: null, stagingWarehouseId: null },
+          inventory: { status: 'not_reserved', source: 'seller_offers', stagingWarehouseId: null },
           discounts: { total: 0, currency: input.currency, allocations: [] },
           accounting: { provider: null, externalDocumentId: null, syncStatus: 'not_synced' },
           extensions: {}, updatedAt: now, schemaVersion: 1,

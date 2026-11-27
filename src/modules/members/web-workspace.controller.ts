@@ -52,7 +52,7 @@ class VehicleProfileDto {
 }
 
 class ProductOfferLocationDto {
-  @IsMongoId() locationId!: string;
+  @IsOptional() @IsMongoId() locationId?: string;
 }
 
 class ProductOfferDto {

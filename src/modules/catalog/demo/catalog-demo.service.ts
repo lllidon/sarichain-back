@@ -7,11 +7,10 @@ import { CategoriesService } from '../../categories/categories.service';
 import { Category } from '../../categories/schemas/category.schema';
 import { ProductsService } from '../../products/products.service';
 import { Product } from '../../products/schemas/product.schema';
-import { demoProducts } from './demo-products';
 
 import { demoBrands, demoCategories, demoProducts } from './demo-food-catalog';
 
-function images(image: string) {
+function images(_image: string) {
   return {
     imageUrl: '/img/catalog/field.webp',
     thumbnailUrl: '/img/catalog/field.webp',

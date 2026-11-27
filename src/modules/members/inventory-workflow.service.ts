@@ -79,10 +79,6 @@ export class InventoryWorkflowService {
       { $unwind: '$seller' },
       { $match: { 'seller.isActive': { $ne: false }, 'seller.producerType': { $type: 'string', $ne: '' } } },
     ];
-    if (escaped) pipeline.push({ $match: { $or: [
-      { 'product.name': new RegExp(escaped, 'i') }, { 'product.sku': new RegExp(escaped, 'i') },
-      { 'seller.fullName': new RegExp(escaped, 'i') }, { 'seller.organization': new RegExp(escaped, 'i') },
-    ] } });
     pipeline.push(
       { $group: {
         _id: '$product._id',
@@ -101,6 +97,12 @@ export class InventoryWorkflowService {
         } },
       } },
       { $addFields: { availableStock: { $subtract: ['$totalStock', '$reservedStock'] } } },
+    );
+    if (escaped) pipeline.push({ $match: { $or: [
+      { name: new RegExp(escaped, 'i') }, { sku: new RegExp(escaped, 'i') },
+      { 'sellers.name': new RegExp(escaped, 'i') },
+    ] } });
+    pipeline.push(
       { $sort: { name: 1, _id: 1 } },
       { $facet: {
         items: [{ $skip: (safePage - 1) * safeLimit }, { $limit: safeLimit }],

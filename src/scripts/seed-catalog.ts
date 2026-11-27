@@ -78,10 +78,15 @@ async function main() {
     const categoryRows = await db.collection('categories').find({ slug: /^demo-/ }).toArray();
     const categoryIds = new Map(categoryRows.map(row => [row.slug, String(row._id)]));
     const producerIds: Types.ObjectId[] = [];
-    let createdMembers = 0;
 
-    async function upsertMember(index: number, fullName: string, profile: Record<string, unknown>) {
+    async function upsertMember(fullName: string, profile: Record<string, unknown>) {
       const phone = String(profile.phone);
+      const current = await members.findOne({ phone });
+      if (current && current.demoSeedKey !== seedKey) throw new Error('Demo phone is already used by a non-demo account: ' + phone);
+      const registered = await phoneRegistry.findOne({ _id: phone });
+      if (registered && (!current || registered.memberId !== String(current._id))) {
+        throw new Error('Demo phone is already reserved by another account: ' + phone);
+      }
       const _id = new Types.ObjectId();
       await members.updateOne(
         { phone, demoSeedKey: seedKey },
@@ -100,7 +105,6 @@ async function main() {
         { $set: { group: 'marketplace', memberId: String(member._id) } },
         { upsert: true },
       );
-      if (index >= 0) createdMembers++;
       return member;
     }
 
@@ -108,7 +112,7 @@ async function main() {
     for (let i = 0; i < 10; i++) {
       const city = towns[(i * 3) % towns.length];
       const fullName = customerNames[i];
-      await upsertMember(i, fullName, {
+      await upsertMember(fullName, {
         ...placement(city, i, fullName), customerType: 'consumer',
         notes: 'مشتری نهایی آزمایشی؛ ' + seedKey,
       });
@@ -131,7 +135,7 @@ async function main() {
       const city = towns[(i * 2 + 1) % towns.length];
       const fullName = driverNames[i];
       const [type, plate, capacityKg, description] = vehicles[i];
-      await upsertMember(10 + i, fullName, {
+      await upsertMember(fullName, {
         ...placement(city, 10 + i, fullName), serviceTypes: ['driver'],
         serviceArea: city.city + ' و مسیرهای بین‌شهری مازندران',
         serviceCredential: 'راننده آزمایشی؛ ' + description,
@@ -150,9 +154,10 @@ async function main() {
       base.deliveryAddresses[0].latitude = Number((latitude + (i % 3) * 0.0004).toFixed(6));
       base.deliveryAddresses[0].longitude = Number((longitude + (i % 4) * 0.0004).toFixed(6));
       base.cityCode = cityCode;
-      const member = await upsertMember(20 + i, fullName, {
+      const member = await upsertMember(fullName, {
         ...base, organization, producerType, productionActivity,
         sellerReview: review(),
+        allowedProductCategoryIds: [...new Set(demoProducts.filter(row => row[8] === i).map(row => categoryIds.get('demo-' + row[2])).filter((id): id is string => Boolean(id)))],
         notes: 'تولیدکننده آزمایشی ' + key + '؛ ' + seedKey,
       });
       producerIds[i] = member._id as Types.ObjectId;
@@ -170,7 +175,7 @@ async function main() {
       const city = towns[(i * 2 + 4) % towns.length];
       const fullName = serviceNames[i];
       const [type, skill] = serviceProfiles[i];
-      await upsertMember(40 + i, fullName, {
+      await upsertMember(fullName, {
         ...placement(city, 40 + i, fullName), serviceTypes: [type],
         serviceArea: city.city + ' و روستاهای اطراف',
         serviceCredential: skill + '؛ پروفایل خدماتی نمونه',
@@ -182,7 +187,7 @@ async function main() {
     for (let i = 0; i < 5; i++) {
       const city = towns[(i * 3 + 2) % towns.length];
       const fullName = supervisorNames[i];
-      await upsertMember(45 + i, fullName, {
+      await upsertMember(fullName, {
         ...placement(city, 45 + i, fullName), serviceTypes: ['supervisor'],
         serviceArea: 'کل استان مازندران؛ حوزه استقرار ' + city.city,
         serviceCredential: 'ناظر میدانی آزمایشی؛ کنترل کیفیت، بازدید مزرعه و ثبت گزارش',
@@ -194,7 +199,7 @@ async function main() {
     // Create one live seller offer for every producer-product pair (200 offers).
     let offers = 0;
     for (let i = 0; i < demoProducts.length; i++) {
-      const [code, name, category, price, unit, description, pack, image, producerIndex] = demoProducts[i];
+      const [code, name, , price, unit, description, pack, , producerIndex] = demoProducts[i];
       const product = await products.findOne({ sku: 'SC-' + code, kind: 'master' });
       if (!product) throw new Error('Missing seeded product SC-' + code);
       const sellerId = producerIds[producerIndex];
@@ -221,7 +226,8 @@ async function main() {
       services: await members.countDocuments({ demoSeedKey: seedKey, serviceTypes: { $in: ['harvest', 'labor'] } }),
       supervisors: await members.countDocuments({ demoSeedKey: seedKey, serviceTypes: 'supervisor' }),
       products: await products.countDocuments({ sku: /^SC-3\d{3}$/ }),
-      offers,
+      offers: await workspace.countDocuments({ demoSeedKey: seedKey, section: 'products' }),
+      totalMembers: await members.countDocuments({ demoSeedKey: seedKey }),
     };
     console.log('Mazandaran marketplace demo seed completed:', counts);
     console.log('Demo login password for all 50 accounts:', password);

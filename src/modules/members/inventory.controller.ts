@@ -7,19 +7,6 @@ import { AdminGuard } from '../auth/admin.guard';
 import { type AccessRequest } from '../auth/access';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 
-class WarehouseDto {
-  @IsString() @Matches(/^[A-Z0-9][A-Z0-9_-]{1,39}$/) id!: string;
-  @IsString() @MinLength(2) @MaxLength(120) name!: string;
-  @IsIn(['main', 'staging']) type!: 'main' | 'staging';
-}
-class OpeningBalanceDto {
-  @IsString() @MinLength(2) warehouseId!: string;
-  @IsMongoId() productId!: string;
-  @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) quantity!: number;
-}
-class ReleaseReservationDto {
-  @IsString() @MinLength(3) @MaxLength(500) reason!: string;
-}
 class AccountingPostingDto {
   @IsString() @MinLength(1) @MaxLength(120) externalDocumentId!: string;
 }
@@ -33,24 +20,6 @@ export class InventoryController {
 
   private actor(access: AccessRequest['access']) {
     return { id: new Types.ObjectId(access.id), type: 'member' as const };
-  }
-
-  @Post('warehouses')
-  createWarehouse(@Body() input: WarehouseDto, @Req() { access }: AccessRequest) {
-    return this.inventory.createWarehouse({ ...input, actor: this.actor(access) });
-  }
-
-  @Post('opening-balances')
-  setOpeningBalance(@Body() input: OpeningBalanceDto, @Req() { access }: AccessRequest) {
-    return this.inventory.setOpeningBalance({
-      ...input, actor: this.actor(access), correlationId: 'opening:' + input.warehouseId + ':' + input.productId,
-    });
-  }
-
-  @Get('balances')
-  getBalances(@Query('warehouseId') warehouseId: string) {
-    if (!warehouseId) throw new BadRequestException('شناسه انبار الزامی است.');
-    return this.inventory.getBalances(warehouseId);
   }
 
   @Get('staging-balances')

@@ -49,6 +49,8 @@ export class MarketplaceMember extends MemberProfile {
   @Prop({ type: ReviewSchema }) driverReview?: RoleReview;
   @Prop({ type: ReviewSchema }) specialistReview?: RoleReview;
   @Prop({ type: [SchemaFactory.createForClass(DeliveryAddress)], default: [] }) deliveryAddresses!: DeliveryAddress[];
+  @Prop({ type: Number, min: 0, default: 0 }) karshaBalance!: number;
+  @Prop({ type: Date }) onboardingKarshaAwardedAt?: Date;
 }
 
 const MarketplaceMemberSchema = SchemaFactory.createForClass(MarketplaceMember);

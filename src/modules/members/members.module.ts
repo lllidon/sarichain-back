@@ -24,10 +24,12 @@ import { OrderPersistenceService } from './order-persistence.service';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 import { MarketplaceKarshaController } from './marketplace-karsha.controller';
 import { InventoryController } from './inventory.controller';
+import { SellerFulfillmentController } from './seller-fulfillment.controller';
+import { SellerFulfillmentService } from './seller-fulfillment.service';
 
 @Module({
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
-  controllers: [MembersController, MarketplaceAccountController, MarketplaceKarshaController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController, WebWeeklyBasketController, InventoryController],
-  providers: [MembersService, AccessTokenGuard, AdminGuard, MarketplaceAccounts, MarketplaceMigration, OrderPersistenceService, InventoryWorkflowService],
+  controllers: [MembersController, MarketplaceAccountController, MarketplaceKarshaController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController, WebWeeklyBasketController, InventoryController, SellerFulfillmentController],
+  providers: [MembersService, AccessTokenGuard, AdminGuard, MarketplaceAccounts, MarketplaceMigration, OrderPersistenceService, InventoryWorkflowService, SellerFulfillmentService],
 })
 export class MembersModule {}

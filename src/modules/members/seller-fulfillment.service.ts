@@ -84,34 +84,46 @@ export class SellerFulfillmentService {
       throw new BadRequestException('شناسه سفارش یا وضعیت انتخاب‌شده معتبر نیست.');
     }
     const sellerId = String(memberId);
-    const ownedLines = await this.db.collection<any>('orderItems').countDocuments({ orderId, sellerId });
-    if (!ownedLines) throw new NotFoundException('این سفارش برای حساب شما ثبت نشده است.');
-    const order = await this.db.collection<any>('orders').findOne({ _id: orderId });
-    if (!order || ['cancelled', 'canceled', 'returned', 'refunded', 'completed'].includes(order.status)) {
-      throw new ConflictException('این سفارش دیگر قابل پردازش نیست.');
-    }
-    const meta = await this.db.collection<any>('orderMeta').findOne({ _id: orderId });
-    if (target === 'preparing' && !(order.status === 'confirmed' || ['paid', 'confirmed'].includes(meta?.payment?.status))) {
-      throw new ConflictException('شروع آماده‌سازی پس از تأیید سفارش یا پرداخت امکان‌پذیر است.');
-    }
     const collection = this.db.collection<any>('sellerOrderFulfillments');
     await collection.createIndex({ orderId: 1, sellerId: 1 }, { unique: true, name: 'uq_seller_fulfillment_order_seller' });
-    const id = orderId + ':' + sellerId;
-    const current = await collection.findOne({ _id: id });
-    const previous: SellerState = SELLER_STATES.includes(current?.status) ? current.status : 'pending';
-    if (previous === target) return { orderId, status: previous, statusLabel: LABELS[previous], idempotent: true };
-    if (NEXT[previous] !== target) throw new ConflictException('ترتیب مراحل پردازش رعایت نشده است؛ ابتدا مرحله قبلی را تکمیل کنید.');
-    const now = new Date();
-    const updated = await collection.updateOne(
-      { _id: id, ...(current ? { status: previous, updatedAt: current.updatedAt } : { status: { $exists: false } }) },
-      { $set: { status: target, updatedAt: now, updatedBy: memberId },
-        $setOnInsert: { orderId, sellerId, createdAt: now } }, { upsert: !current },
-    );
-    if (!updated.modifiedCount && !updated.upsertedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است؛ صفحه را تازه کنید.');
-    await this.db.collection<any>('sellerOrderFulfillmentEvents').insertOne({
-      orderId, sellerId, fromStatus: previous, toStatus: target, actorId: memberId,
-      occurredAt: now, schemaVersion: 1,
-    });
-    return { orderId, status: target, statusLabel: LABELS[target], updatedAt: now };
+    const session = await this.connection.startSession();
+    try {
+      let response: any;
+      await session.withTransaction(async () => {
+        const ownedLines = await this.db.collection<any>('orderItems').countDocuments({ orderId, sellerId }, { session });
+        if (!ownedLines) throw new NotFoundException('این سفارش برای حساب شما ثبت نشده است.');
+        const order = await this.db.collection<any>('orders').findOne({ _id: orderId }, { session });
+        if (!order || ['cancelled', 'canceled', 'returned', 'refunded', 'completed'].includes(order.status)) {
+          throw new ConflictException('این سفارش دیگر قابل پردازش نیست.');
+        }
+        const meta = await this.db.collection<any>('orderMeta').findOne({ _id: orderId }, { session });
+        if (target === 'preparing' && !(order.status === 'confirmed' || ['paid', 'confirmed'].includes(meta?.payment?.status))) {
+          throw new ConflictException('شروع آماده‌سازی پس از تأیید سفارش یا پرداخت امکان‌پذیر است.');
+        }
+        const id = orderId + ':' + sellerId;
+        const current = await collection.findOne({ _id: id }, { session });
+        const previous: SellerState = SELLER_STATES.includes(current?.status) ? current.status : 'pending';
+        if (previous === target) {
+          response = { orderId, status: previous, statusLabel: LABELS[previous], idempotent: true };
+          return;
+        }
+        if (NEXT[previous] !== target) throw new ConflictException('ترتیب مراحل پردازش رعایت نشده است؛ ابتدا مرحله قبلی را تکمیل کنید.');
+        const now = new Date();
+        const updated = await collection.updateOne(
+          { _id: id, ...(current ? { status: previous, updatedAt: current.updatedAt } : { status: { $exists: false } }) },
+          { $set: { status: target, updatedAt: now, updatedBy: memberId },
+            $setOnInsert: { orderId, sellerId, createdAt: now } }, { upsert: !current, session },
+        );
+        if (!updated.modifiedCount && !updated.upsertedCount) throw new ConflictException('وضعیت سفارش هم‌زمان تغییر کرده است؛ صفحه را تازه کنید.');
+        await this.db.collection<any>('sellerOrderFulfillmentEvents').insertOne({
+          orderId, sellerId, fromStatus: previous, toStatus: target, actorId: memberId,
+          occurredAt: now, schemaVersion: 1,
+        }, { session });
+        response = { orderId, status: target, statusLabel: LABELS[target as SellerState], updatedAt: now };
+      });
+      return response;
+    } finally {
+      await session.endSession();
+    }
   }
 }

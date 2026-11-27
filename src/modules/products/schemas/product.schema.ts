@@ -146,6 +146,11 @@ ProductSchema.index({ brandId: 1, isActive: 1 });
 ProductSchema.index({ masterId: 1, isActive: 1 });
 
 ProductSchema.pre('validate', function () {
+  const physical = this.physical;
+  if (physical?.temperatureMinC != null && physical?.temperatureMaxC != null && physical.temperatureMinC > physical.temperatureMaxC) {
+    this.invalidate('physical.temperatureMinC', 'Minimum transport temperature cannot exceed maximum temperature.');
+  }
+
   if (this.kind === 'master') {
     if (this.masterId != null) this.invalidate('masterId', 'A master cannot reference another product.');
     if (this.basePrice == null) this.invalidate('basePrice', 'A master requires a base price.');

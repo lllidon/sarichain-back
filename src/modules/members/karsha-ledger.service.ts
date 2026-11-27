@@ -89,6 +89,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     const memberObjectId = new Types.ObjectId(memberId);
     await this.ensureLegacyLot(memberObjectId);
     await this.applyDueForMember(memberObjectId);
+    const policy = await this.readPolicy();
     try {
       return await this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
@@ -106,7 +107,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       await this.members.updateOne({ _id: memberObjectId }, update, { session });
       const transaction = { _id: new Types.ObjectId(), memberId: memberObjectId, lotId, type: options.kind || 'credit',
         amount, balanceAfter: balance, reason: options.reason.trim(), actor: options.actor || null,
-        idempotencyKey: options.idempotencyKey, createdAt: now, rateTomanPerKarsha: (await this.readPolicy()).rateTomanPerKarsha ?? null };
+        idempotencyKey: options.idempotencyKey, createdAt: now, rateTomanPerKarsha: policy.rateTomanPerKarsha ?? null };
       await this.ledger.insertOne(transaction, { session });
       return { duplicate: false, transaction, balance };
       });
@@ -127,6 +128,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     const memberObjectId = new Types.ObjectId(memberId);
     await this.ensureLegacyLot(memberObjectId);
     await this.applyDueForMember(memberObjectId);
+    const policy = await this.readPolicy();
     try {
       return await this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
@@ -158,7 +160,6 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       const changed = await this.members.updateOne({ _id: memberObjectId, karshaBalance: { $gte: amount } },
         { $inc: { karshaBalance: -amount }, $set: { updatedAt: new Date() } }, { session });
       if (!changed.modifiedCount) throw new ConflictException('موجودی هم‌زمان تغییر کرده است؛ دوباره تلاش کنید.');
-      const policy = await this.readPolicy();
       const transaction = { _id: new Types.ObjectId(), memberId: memberObjectId, type: options.type || 'debit',
         amount: -amount, balanceAfter, reason: options.reason.trim(), actor: options.actor || null,
         allocations, idempotencyKey: options.idempotencyKey, createdAt: new Date(),
@@ -187,6 +188,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
       const due = await this.lots.findOne({ memberId, status: 'active', remainingAmount: { $gt: 0 }, nextDecayAt: { $lte: now } },
         { sort: { nextDecayAt: 1, createdAt: 1 } });
       if (!due) break;
+      const policy = await this.readPolicy();
       await this.inTransaction(async session => {
         const lot = await this.lots.findOne({ _id: due._id, status: 'active', nextDecayAt: { $lte: now } }, { session });
         if (!lot) return;
@@ -209,7 +211,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
           await this.ledger.updateOne({ idempotencyKey }, { $setOnInsert: {
             _id: new Types.ObjectId(), memberId, lotId: lot._id, type: 'decay', amount: -charge,
             balanceAfter, reason: 'کاهش ماهانه کارسا طبق سیاست ۰٫۲ درصد سالانه', actor: 'system',
-            idempotencyKey, createdAt: now, rateTomanPerKarsha: (await this.readPolicy()).rateTomanPerKarsha ?? null,
+            idempotencyKey, createdAt: now, rateTomanPerKarsha: policy.rateTomanPerKarsha ?? null,
           } }, { upsert: true, session });
         }
       });
@@ -219,6 +221,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
   private async ensureLegacyLot(memberId: Types.ObjectId) {
     const current = await this.members.findOne({ _id: memberId }, { projection: { karshaBalance: 1 } });
     if (!current || Number(current.karshaBalance ?? 0) <= 0) return;
+    const policy = await this.readPolicy();
     try {
       await this.inTransaction(async session => {
       const member = await this.members.findOne({ _id: memberId }, { session });
@@ -244,7 +247,6 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
           createdAt: now, anchorAt: now, decayPeriods: 0, nextDecayAt: addMonthiversary(now, 1),
           status: 'active', createdBy: 'system' }, { session });
       }
-      const policy = await this.readPolicy();
       await this.ledger.insertOne({ _id: new Types.ObjectId(), memberId, lotId, type: 'migration',
         amount: difference, balanceAfter: balance, reason: 'انتقال موجودی قبلی به دفتر کل کارسا',
         actor: 'system', idempotencyKey: 'legacy-migration:' + memberId.toString() + ':' + now.getTime(),

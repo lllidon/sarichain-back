@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Headers, Param, Patch, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, Headers, Param, Patch, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { SellerFulfillmentService } from './seller-fulfillment.service';
@@ -10,6 +10,7 @@ export class SellerFulfillmentController {
   constructor(private readonly accounts: MarketplaceAccounts, private readonly fulfillment: SellerFulfillmentService) {}
 
   @Get()
+  @Header('Cache-Control', 'private, no-store')
   async list(@Headers('authorization') authorization: string | undefined,
     @Query('page') pageText = '1', @Query('limit') limitText = '20', @Query('status') status = 'active') {
     const member = await this.accounts.requireMember(authorization);

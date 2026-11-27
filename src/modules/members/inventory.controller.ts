@@ -7,6 +7,10 @@ import { AdminGuard } from '../auth/admin.guard';
 import { type AccessRequest } from '../auth/access';
 import { InventoryWorkflowService } from './inventory-workflow.service';
 
+class ReleaseReservationDto {
+  @IsString() @MinLength(1) @MaxLength(500) reason!: string;
+}
+
 class AccountingPostingDto {
   @IsString() @MinLength(1) @MaxLength(120) externalDocumentId!: string;
 }

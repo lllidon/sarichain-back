@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Header, NotFoundException, 
 import { InjectConnection } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { IsIn, IsNumber, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-import { Connection } from 'mongoose';
+import { Connection, Types } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import { AdminGuard } from '../auth/admin.guard';
 import type { AccessRequest } from '../auth/access';
@@ -57,11 +57,18 @@ export class StoreOrdersController {
       ids.length ? this.db.collection<any>('orderItems').find({ orderId: { $in: ids } }).sort({ orderId: 1, lineNumber: 1 }).toArray() : [],
       items.length ? this.db.collection<any>('members').find({ _id: { $in: items.map(order => order.memberId).filter(Boolean) } }, { projection: { fullName: 1, phone: 1, organization: 1 } }).toArray() : [],
     ]);
+    const productIds = [...new Set(lines.map(line => String(line.productId)).filter(id => Types.ObjectId.isValid(id)))];
+    const products = productIds.length ? await this.db.collection<any>('products').find(
+      { _id: { $in: productIds.map(id => new Types.ObjectId(id)) } },
+      { projection: { imageUrl: 1, thumbnailUrl: 1, gallery: 1, sku: 1 } },
+    ).toArray() : [];
+    const productMap = new Map(products.map(product => [String(product._id), product]));
     const memberMap = new Map(members.map(member => [String(member._id), member]));
     const linesByOrder = new Map<string, any[]>();
     for (const line of lines) {
       const list = linesByOrder.get(String(line.orderId)) ?? [];
-      list.push({ ...line, unitPrice: { min: fromMinor(line.unitPrice?.min), max: fromMinor(line.unitPrice?.max) },
+      const product = productMap.get(String(line.productId));
+      list.push({ ...line, image: product?.thumbnailUrl || product?.imageUrl || product?.gallery?.[0] || null, sku: product?.sku || null, unitPrice: { min: fromMinor(line.unitPrice?.min), max: fromMinor(line.unitPrice?.max) },
         lineSubtotal: { min: fromMinor(line.lineSubtotal?.min), max: fromMinor(line.lineSubtotal?.max) } });
       linesByOrder.set(String(line.orderId), list);
     }
@@ -87,12 +94,18 @@ export class StoreOrdersController {
       this.db.collection<any>('orderEvents').find({ orderId: id }).sort({ occurredAt: 1 }).toArray(),
       order.memberId ? this.db.collection<any>('members').findOne({ _id: order.memberId }, { projection: { fullName: 1, phone: 1, organization: 1, deliveryAddresses: 1 } }) : null,
     ]);
+    const productIds = [...new Set(items.map(item => String(item.productId)).filter(id => Types.ObjectId.isValid(id)))];
+    const products = productIds.length ? await this.db.collection<any>('products').find(
+      { _id: { $in: productIds.map(id => new Types.ObjectId(id)) } },
+      { projection: { imageUrl: 1, thumbnailUrl: 1, gallery: 1, sku: 1 } },
+    ).toArray() : [];
+    const productMap = new Map(products.map(product => [String(product._id), product]));
     return { ...order, customer: member ?? order.customer ?? null, total: fromMinor(order.total),
       meta: meta ? { ...meta, shipping: meta.shipping ? { ...meta.shipping, fee: fromMinor(meta.shipping.fee) } : meta.shipping } : meta,
       subtotal: { min: fromMinor(order.subtotal?.min), max: fromMinor(order.subtotal?.max) },
       price: { min: fromMinor(order.price?.min), max: fromMinor(order.price?.max) },
-      items: items.map(item => ({ ...item, unitPrice: { min: fromMinor(item.unitPrice?.min), max: fromMinor(item.unitPrice?.max) },
-        lineSubtotal: { min: fromMinor(item.lineSubtotal?.min), max: fromMinor(item.lineSubtotal?.max) } })),
+      items: items.map(item => { const product = productMap.get(String(item.productId)); return { ...item, image: product?.thumbnailUrl || product?.imageUrl || product?.gallery?.[0] || null, sku: product?.sku || null, unitPrice: { min: fromMinor(item.unitPrice?.min), max: fromMinor(item.unitPrice?.max) },
+        lineSubtotal: { min: fromMinor(item.lineSubtotal?.min), max: fromMinor(item.lineSubtotal?.max) } }; }),
       meta, events };
   }
 

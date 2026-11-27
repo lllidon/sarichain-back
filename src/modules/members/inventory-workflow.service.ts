@@ -24,6 +24,9 @@ export class InventoryWorkflowService {
   async createWarehouse(input: { id: string; name: string; type: 'main' | 'staging'; actor: Actor }) {
     await this.ensureIndexes();
     if (!input.id.trim() || !input.name.trim()) throw new BadRequestException('شناسه و نام انبار الزامی است.');
+    if ((input.id === STAGING_WAREHOUSE_ID) !== (input.type === 'staging')) throw new BadRequestException('شناسه انبار واسط رزروشده است و فقط با نوع staging قابل استفاده است.');
+    const previous = await this.db.collection('warehouses').findOne({ _id: input.id });
+    if (previous && (previous.type !== input.type || previous.name !== input.name.trim())) throw new ConflictException('مشخصات انبار موجود قابل تغییر نیست؛ شناسه دیگری انتخاب کنید.');
     await this.db.collection('warehouses').updateOne({ _id: input.id }, {
       $setOnInsert: { name: input.name.trim(), type: input.type, isActive: true, createdAt: new Date(), createdBy: input.actor.id, schemaVersion: 1 },
     }, { upsert: true });
@@ -89,6 +92,13 @@ export class InventoryWorkflowService {
         const orders = this.db.collection('orders');
         const order = await orders.findOne({ _id: orderId }, { session });
         if (!order) throw new NotFoundException('سفارش پیدا نشد.');
+        const sourceWarehouse = await this.db.collection('warehouses').findOne({ _id: sourceWarehouseId, type: 'main', isActive: true }, { session });
+        if (!sourceWarehouse) throw new NotFoundException('انبار اصلی فعال پیدا نشد.');
+        await this.db.collection('warehouses').updateOne(
+          { _id: STAGING_WAREHOUSE_ID },
+          { $setOnInsert: { name: 'انبار واسط حسابداری', type: 'staging', isActive: true, createdAt: new Date(), schemaVersion: 1 } },
+          { upsert: true, session },
+        );
         if (!['pending', 'confirmed', 'awaiting_inventory'].includes(String(order.status))) {
           throw new ConflictException('وضعیت سفارش اجازه انتقال به انبار واسط را نمی‌دهد.');
         }

@@ -111,11 +111,15 @@ export class OrganizationController {
     const now = new Date();
     const collection = this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs');
     const current = await collection.findOne({ _id: 'default' });
+    const currentSettings: Partial<TransportZoneTariffRecord> = current ? { ...current } : {};
+    delete currentSettings.createdAt;
+    delete currentSettings.updatedAt;
     const supplied = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined)) as Partial<TransportZoneTariffRecord>;
     const record: TransportZoneTariffRecord = {
-      ...defaultTransportZoneTariffs, ...(current ?? {}), ...supplied, _id: 'default', updatedAt: now,
+      ...defaultTransportZoneTariffs, ...currentSettings, ...supplied, _id: 'default', updatedAt: now,
     };
-    await collection.updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });
+    const { _id: recordId, createdAt, ...settings } = record;
+    await collection.updateOne({ _id: 'default' }, { $set: settings, $setOnInsert: { createdAt: now } }, { upsert: true });
     return this.getTransportZoneTariffs();
   }
 

@@ -44,6 +44,9 @@ export class TransportZoneTariffsDto {
   @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) hubLongitude?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) hubHandlingKar?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) hubPerKgKar?: number;
+  @IsOptional() @IsBoolean() hubSupportsRefrigeration?: boolean;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(1000000) hubMaxWeightKg?: number;
+  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000) hubMaxVolumeM3?: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) normalMultiplier!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) specialMultiplier!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) expressMultiplier!: number;
@@ -55,6 +58,7 @@ export interface TransportZoneTariffRecord {
   expressMultiplier: number; urgentMultiplier: number;
   refrigeratedBaseKar: number; refrigeratedPerKgKar: number; fragileMultiplier: number;
   hubEnabled: boolean; hubLatitude?: number; hubLongitude?: number; hubHandlingKar: number; hubPerKgKar: number;
+  hubSupportsRefrigeration: boolean; hubMaxWeightKg: number; hubMaxVolumeM3: number;
   createdAt?: Date; updatedAt?: Date;
 }
 export const zoneDefinitions = [
@@ -77,6 +81,7 @@ export const defaultTransportZoneTariffs: TransportZoneTariffRecord = {
   normalMultiplier: 1, specialMultiplier: 1.35, expressMultiplier: 1.8, urgentMultiplier: 2.5,
   refrigeratedBaseKar: 0, refrigeratedPerKgKar: 0, fragileMultiplier: 1.15,
   hubEnabled: false, hubHandlingKar: 0, hubPerKgKar: 0,
+  hubSupportsRefrigeration: false, hubMaxWeightKg: 0, hubMaxVolumeM3: 0,
 };
 
 function normalize(value: string) {

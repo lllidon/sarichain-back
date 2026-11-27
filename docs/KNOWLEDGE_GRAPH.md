@@ -69,6 +69,15 @@ flowchart TD
 - Directory material suppliers are not producer offers and do not represent an order/quote workflow.
 - Organization access scope is separate from a member's marketplace capabilities.
 
+## Producer category scope and seller-offer authorization
+
+- Marketplace producer permissions are stored on the member as `allowedProductCategoryIds: string[]` in `src/modules/members/member.schemas.ts`. The member profile exposes this field to the website.
+- `POST /web/account-upgrades/producer-categories` in `src/modules/members/account-upgrades.controller.ts` is for an already-approved producer only. It validates the requested category IDs against the `categories` collection, rejects unchanged/empty/oversized selections, snapshots current and requested IDs and labels, and creates a pending `producer_categories` request. A unique partial index prevents more than one pending request of this kind per member.
+- The existing management review endpoint `PATCH /members/account-upgrades/:id/review` handles this request kind. On approval it replaces `allowedProductCategoryIds` with the requested set, provided the member is still an approved producer. Category-scope changes do not award the one-time onboarding Karsha credit; rejection leaves the current permissions unchanged.
+- Seller offer creation in `src/modules/members/web-workspace.controller.ts` checks that the member is an approved producer and that the selected product's `categoryId` is included in `allowedProductCategoryIds`. The MongoDB product projection must include `categoryId`; omitting it makes the authorization comparison fail even for a correctly authorized producer. This regression was fixed on `main` by adding `categoryId: 1` to the projection (backend PR #7).
+- Related website flow: `sarichain-web/docs/KNOWLEDGE_GRAPH.md`. Related review UI: `sarichain-panel/docs/KNOWLEDGE_GRAPH.md`.
+- Deployment note: the backend route and authorization fix are source changes on `main`; the running API must be rebuilt/restarted before the fix is effective in production.
+
 ## API consumers
 - `sarichain-panel`: `/auth`, `/catalog`, `/members`, `/directory`, `/locations`, `/organization`, inventory and transport endpoints.
 - `sarichain-web`: public `/web/products`, `/web/categories`, `/web/brands`; authenticated `/web/login`, profile, orders, delivery, workspace, transport and location endpoints.

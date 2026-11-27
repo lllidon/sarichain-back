@@ -47,6 +47,7 @@ export class MarketplaceAccounts {
     return {
       fullName: member.fullName, phone: member.phone, email: member.email, organization: member.organization,
       address: member.address, province: member.province, city: member.city,
+      deliveryAddresses: member.deliveryAddresses ?? [],
       provinceCode: member.provinceCode, cityCode: member.cityCode, customerType: member.customerType,
       producerType: member.producerType, productionActivity: member.productionActivity,
       allowedProductCategoryIds: member.allowedProductCategoryIds ?? [],
@@ -72,6 +73,11 @@ export class MarketplaceAccounts {
   async update(authorization: string | undefined, input: MarketplaceProfileDto) {
     const member = await this.requireMember(authorization);
     if (Object.values(input).some(value => value === null)) throw new BadRequestException('مقدار خالی نامعتبر است.');
+    for (const address of input.deliveryAddresses ?? []) {
+      if ((address.latitude == null) !== (address.longitude == null)) {
+        throw new BadRequestException('برای هر نشانی، عرض و طول جغرافیایی باید با هم ثبت شوند.');
+      }
+    }
     const producerType = member.producerType;
     const changed = Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
     delete changed.producerType;

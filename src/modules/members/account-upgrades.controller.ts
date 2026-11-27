@@ -219,10 +219,11 @@ export class AccountUpgradesController {
       } else if (row.kind === 'producer_categories') {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست دسترسی دسته‌بندی خالی است.');
-        await this.members.updateOne({ _id: row.memberId, producerType: { $exists: true }, 'sellerReview.status': 'approved' }, {
+        const granted = await this.members.updateOne({ _id: row.memberId, producerType: { $exists: true }, 'sellerReview.status': 'approved' }, {
           $addToSet: { allowedProductCategoryIds: { $each: categories } },
           $set: { updatedAt: now },
         });
+        if (!granted.matchedCount) throw new BadRequestException('صلاحیت تولیدکنندگی این حساب دیگر فعال نیست؛ درخواست را بررسی کنید.');
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست تولیدکننده دسته‌بندی مجاز ندارد.');

@@ -20,10 +20,11 @@ import { memberModels } from './member.schemas';
 import { MembersController } from './members.controller';
 import { MembersService } from './members.service';
 import { OrderPersistenceService } from './order-persistence.service';
+import { InventoryWorkflowService } from './inventory-workflow.service';
 
 @Module({
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
   controllers: [MembersController, MarketplaceAccountController, AccountUpgradesController, WebOrdersController, WebDeliveryController, WebWorkspaceController, WebTransportOrdersController, WebCartController, WebWeeklyBasketController],
-  providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration, OrderPersistenceService],
+  providers: [MembersService, AccessTokenGuard, MarketplaceAccounts, MarketplaceMigration, OrderPersistenceService, InventoryWorkflowService],
 })
 export class MembersModule {}

@@ -9,7 +9,7 @@ import { PriceRange, Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { CartService } from '../cart/cart.service';
 import { producerOffers } from '../catalog/producer-offers';
-import { deliveryMethods, deliverySlots, quoteBasketDelivery, resolveDelivery } from './web-delivery';
+import { deliveryMethods, deliveryOptions, deliverySlots, quoteBasketDelivery, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { OrderPersistenceService } from './order-persistence.service';
 
@@ -30,10 +30,10 @@ class DeliveryDto {
   @ApiProperty() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) dispatchDate!: string;
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
-  @ApiProperty({ type: DeliveryPointDto }) @IsDefined() @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
-  @ApiProperty() @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) quotedFee!: number;
-  @ApiProperty({ enum: ['direct', 'hub'] }) @IsIn(['direct', 'hub']) quotedRouteMode!: 'direct' | 'hub';
-  @ApiProperty() @IsNumber({ maxDecimalPlaces: 1 }) @Min(0) @Max(1000000) quotedDistanceKm!: number;
+  @ApiProperty({ type: DeliveryPointDto, required: false }) @IsOptional() @ValidateNested() @Type(() => DeliveryPointDto) destination?: DeliveryPointDto;
+  @ApiProperty({ required: false }) @IsOptional() @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) quotedFee?: number;
+  @ApiProperty({ enum: ['direct', 'hub'], required: false }) @IsOptional() @IsIn(['direct', 'hub']) quotedRouteMode?: 'direct' | 'hub';
+  @ApiProperty({ required: false }) @IsOptional() @IsNumber({ maxDecimalPlaces: 1 }) @Min(0) @Max(1000000) quotedDistanceKm?: number;
 }
 
 class DeliveryQuoteLineDto {
@@ -67,7 +67,7 @@ export class WebDeliveryController {
   @Get()
   @Header('Cache-Control', 'no-store')
   options() {
-    return { methods: [], quoteRequired: true };
+    return { methods: deliveryOptions() };
   }
 
   @Post()
@@ -182,12 +182,15 @@ export class WebOrdersController {
       });
       await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.products.validated', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { itemCount: items.length } });
       const shippingOptions = requestedDelivery
-        ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination) : [];
+        ? requestedDelivery.destination
+          ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination)
+          : deliveryOptions()
+        : [];
       const delivery = requestedDelivery ? resolveDelivery(requestedDelivery, shippingOptions) : undefined;
-      if (delivery && input.delivery && (
+      if (delivery && input.delivery?.quotedFee !== undefined && (
         Math.abs(delivery.fee - input.delivery.quotedFee) > 0.0001 ||
         delivery.routeMode !== input.delivery.quotedRouteMode ||
-        Math.abs(delivery.distanceKm - input.delivery.quotedDistanceKm) > 0.11
+        Math.abs((delivery.distanceKm ?? 0) - (input.delivery.quotedDistanceKm ?? 0)) > 0.11
       )) {
         throw new ConflictException('تعرفه یا مسیر حمل تغییر کرده است؛ گزینه‌های ارسال را دوباره بررسی کنید.');
       }

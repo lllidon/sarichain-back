@@ -103,15 +103,28 @@ function haversine(a: TransportStopDto, b: TransportStopDto) {
 function zoneForDistance(distanceKm: number) {
   return zoneDefinitions.find(zone => distanceKm >= zone.minKm && (zone.maxKm === null || distanceKm < zone.maxKm || (zone.id === 'zone-4' && distanceKm <= zone.maxKm))) ?? zoneDefinitions[5];
 }
+const routeCache = new Map<string, { promise: Promise<number | null>; expiresAt: number }>();
+
 async function roadLegKm(a: TransportStopDto, b: TransportStopDto): Promise<number | null> {
+  const key = [a.latitude, a.longitude, b.latitude, b.longitude].join(',');
+  const cached = routeCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.promise;
+
   const base = process.env.ROUTING_SERVICE_URL?.replace(/\/$/, '') || 'https://router.project-osrm.org';
-  try {
-    const response = await fetch(base + '/route/v1/driving/' + a.longitude + ',' + a.latitude + ';' + b.longitude + ',' + b.latitude + '?overview=false&alternatives=false&steps=false', { signal: AbortSignal.timeout(5000) });
-    if (!response.ok) return null;
-    const data = await response.json() as { routes?: Array<{ distance?: number }> };
-    const meters = data.routes?.[0]?.distance;
-    return typeof meters === 'number' && Number.isFinite(meters) && meters >= 0 ? meters / 1000 : null;
-  } catch { return null; }
+  const promise = (async () => {
+    try {
+      const response = await fetch(base + '/route/v1/driving/' + a.longitude + ',' + a.latitude + ';' + b.longitude + ',' + b.latitude + '?overview=false&alternatives=false&steps=false', { signal: AbortSignal.timeout(5000) });
+      if (!response.ok) return null;
+      const data = await response.json() as { routes?: Array<{ distance?: number }> };
+      const meters = data.routes?.[0]?.distance;
+      return typeof meters === 'number' && Number.isFinite(meters) && meters >= 0 ? meters / 1000 : null;
+    } catch { return null; }
+  })();
+  const entry = { promise, expiresAt: Date.now() + 5000 };
+  routeCache.set(key, entry);
+  void promise.then(value => { entry.expiresAt = Date.now() + (value === null ? 10000 : 60000); });
+  if (routeCache.size > 2000) routeCache.delete(routeCache.keys().next().value!);
+  return promise;
 }
 export async function quoteTransportOrder(stops: TransportStopDto[], weightKg: number, volumeM3: number, urgency: string, tariffs: TransportZoneTariffRecord) {
   const directDistanceKm = stops.slice(1).reduce((sum, stop, index) => sum + haversine(stops[index], stop), 0);

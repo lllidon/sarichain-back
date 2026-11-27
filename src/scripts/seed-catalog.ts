@@ -14,7 +14,7 @@ const provinceCode = '29';
 const towns = [
   { city: 'ساری', code: '348', lat: 36.5659, lng: 53.0586 },
   { city: 'بابل', code: '342', lat: 36.5387, lng: 52.6765 },
-  { city: 'آمل', code: '349', lat: 36.4696, lng: 52.3507 },
+  { city: 'آمل', code: '339', lat: 36.4696, lng: 52.3507 },
   { city: 'قائم شهر', code: '332', lat: 36.4631, lng: 52.8604 },
   { city: 'بهشهر', code: '341', lat: 36.6923, lng: 53.5526 },
   { city: 'بابلسر', code: '343', lat: 36.7025, lng: 52.6574 },

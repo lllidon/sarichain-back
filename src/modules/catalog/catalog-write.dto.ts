@@ -22,14 +22,14 @@ class SaleUnitDto {
 }
 
 class DimensionsDto {
-  @IsNumber() @Min(Number.MIN_VALUE) lengthMm!: number;
-  @IsNumber() @Min(Number.MIN_VALUE) widthMm!: number;
-  @IsNumber() @Min(Number.MIN_VALUE) heightMm!: number;
+  @IsNumber() @Min(Number.MIN_VALUE) @Max(100_000) lengthMm!: number;
+  @IsNumber() @Min(Number.MIN_VALUE) @Max(100_000) widthMm!: number;
+  @IsNumber() @Min(Number.MIN_VALUE) @Max(100_000) heightMm!: number;
 }
 
 class PhysicalDto {
-  @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) standardDensityKgM3?: number;
-  @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) shippingWeightG?: number;
+  @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) @Max(10_000) standardDensityKgM3?: number;
+  @IsOptional() @IsNumber() @Min(Number.MIN_VALUE) @Max(100_000_000) shippingWeightG?: number;
   @IsOptional() @IsBoolean() requiresRefrigeration?: boolean;
   @IsOptional() @IsNumber() @Min(-80) @Max(80) temperatureMinC?: number;
   @IsOptional() @IsNumber() @Min(-80) @Max(80) temperatureMaxC?: number;

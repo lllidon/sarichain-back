@@ -9,7 +9,7 @@ import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { KarshaLedgerService } from './karsha-ledger.service';
 
-const requestKinds = ['transport', 'producer'] as const;
+const requestKinds = ['transport', 'producer', 'producer_categories'] as const;
 const documentKinds = ['nationalId', 'driverLicense', 'vehicleCard', 'productionProof'] as const;
 const uploadFields = [
   { name: 'nationalId', maxCount: 1 }, { name: 'driverLicense', maxCount: 1 },
@@ -72,7 +72,7 @@ export class AccountUpgradesController {
     if (typeof kind !== 'string' || !requestKinds.includes(kind as typeof requestKinds[number])) {
       throw new BadRequestException('نوع درخواست ارتقا معتبر نیست.');
     }
-    const required = kind === 'transport' ? ['nationalId', 'driverLicense', 'vehicleCard'] : ['nationalId', 'productionProof'];
+    const required = kind === 'transport' ? ['nationalId', 'driverLicense', 'vehicleCard'] : kind === 'producer' ? ['nationalId', 'productionProof'] : [];
     const documents: Array<{ type: string; fileName: string; mimeType: string; data: string }> = [];
     for (const type of documentKinds) {
       const file = files?.[type]?.[0];
@@ -99,7 +99,7 @@ export class AccountUpgradesController {
         throw new BadRequestException('مشخصات وسیله نقلیه را کامل و صحیح وارد کنید.');
       }
       vehicle = { ...vehicle, model: vehicle.model.trim(), plate: vehicle.plate.trim(), license: vehicle.license.trim() };
-    } else {
+    } else if (kind === 'producer') {
       producerType = typeof body.producerType === 'string' ? body.producerType : '';
       if (!['orchard', 'farm', 'dairy', 'greenhouse', 'other'].includes(producerType)) {
         throw new BadRequestException('نوع فعالیت تولیدی را انتخاب کنید.');
@@ -116,6 +116,25 @@ export class AccountUpgradesController {
       ).toArray();
       if (categoryRows.length !== requestedCategoryIds.length) throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
       requestedCategoryLabels = categoryRows.map(row => String(row.name || ''));
+    } else {
+      if (!member.producerType || member.sellerReview?.status !== 'approved') {
+        throw new BadRequestException('برای درخواست دسترسی دسته‌بندی، ابتدا باید صلاحیت تولیدکنندگی تأیید شده باشد.');
+      }
+      try {
+        const raw = typeof body.requestedCategoryIds === 'string' ? JSON.parse(body.requestedCategoryIds) : [];
+        if (Array.isArray(raw)) requestedCategoryIds = [...new Set(raw.filter((id): id is string => typeof id === 'string'))];
+      } catch { requestedCategoryIds = []; }
+      const alreadyAllowed = new Set(member.allowedProductCategoryIds ?? []);
+      if (!requestedCategoryIds.length || requestedCategoryIds.length > 20 ||
+        requestedCategoryIds.some(id => !isObjectIdOrHexString(id) || alreadyAllowed.has(id))) {
+        throw new BadRequestException('دسته‌بندی جدید و معتبری برای درخواست انتخاب کنید.');
+      }
+      const categoryRows = await this.connection.db!.collection('categories').find(
+        { _id: { $in: requestedCategoryIds.map(id => new Types.ObjectId(id)) }, parentId: { $exists: true, $ne: null } },
+        { projection: { name: 1 } },
+      ).toArray();
+      if (categoryRows.length !== requestedCategoryIds.length) throw new BadRequestException('یکی از دسته‌بندی‌های انتخاب‌شده معتبر نیست.');
+      requestedCategoryLabels = categoryRows.map(row => String(row.name || ''));
     }
 
     await this.requests.createIndex({ memberId: 1, kind: 1 }, {
@@ -128,6 +147,7 @@ export class AccountUpgradesController {
     const record = {
       memberId: member._id, kind, status: 'pending', documents,
       ...(kind === 'producer' && { producerType, requestedCategoryIds, requestedCategoryLabels }),
+      ...(kind === 'producer_categories' && { requestedCategoryIds, requestedCategoryLabels }),
       ...(kind === 'transport' && { vehicle }),
       memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
       createdAt: now, updatedAt: now,
@@ -185,6 +205,13 @@ export class AccountUpgradesController {
           $addToSet: { serviceTypes: 'driver' },
           $set: { vehicle: { type: row.vehicle.type, plate: row.vehicle.plate, license: row.vehicle.license },
             driverReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId }, updatedAt: now },
+        });
+      } else if (row.kind === 'producer_categories') {
+        const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
+        if (!categories.length) throw new BadRequestException('درخواست دسترسی دسته‌بندی خالی است.');
+        await this.members.updateOne({ _id: row.memberId, producerType: { $exists: true }, 'sellerReview.status': 'approved' }, {
+          $addToSet: { allowedProductCategoryIds: { $each: categories } },
+          $set: { updatedAt: now },
         });
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];

@@ -17,9 +17,6 @@ class OpeningBalanceDto {
   @IsMongoId() productId!: string;
   @IsInt() @Min(0) @Max(Number.MAX_SAFE_INTEGER) quantity!: number;
 }
-class StageOrderDto {
-  @IsString() @MinLength(2) sourceWarehouseId!: string;
-}
 class ReleaseReservationDto {
   @IsString() @MinLength(3) @MaxLength(500) reason!: string;
 }
@@ -61,9 +58,22 @@ export class InventoryController {
     return this.inventory.getStagingBalances();
   }
 
+  @Get('products')
+  getProductStockSummary(
+    @Query('search') search = '',
+    @Query('page') page = '1',
+    @Query('limit') limit = '20',
+  ) {
+    const parsedPage = Number(page), parsedLimit = Number(limit);
+    if (!Number.isInteger(parsedPage) || parsedPage < 1 || !Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) {
+      throw new BadRequestException('شماره صفحه و تعداد در صفحه معتبر نیست.');
+    }
+    return this.inventory.getProductStockSummary(search, parsedPage, parsedLimit);
+  }
+
   @Post('orders/:orderId/stage')
-  stageOrder(@Param('orderId') orderId: string, @Body() input: StageOrderDto, @Req() { access }: AccessRequest) {
-    return this.inventory.stageOrder(orderId, input.sourceWarehouseId, this.actor(access), 'stage:' + orderId);
+  stageOrder(@Param('orderId') orderId: string, @Req() { access }: AccessRequest) {
+    return this.inventory.stageOrder(orderId, this.actor(access), 'stage:' + orderId);
   }
 
   @Post('orders/:orderId/release-staging')

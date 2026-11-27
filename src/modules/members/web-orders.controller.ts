@@ -1,15 +1,16 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, Headers, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, Header, Headers, Post, Query } from '@nestjs/common';
+import { InjectConnection } from '@nestjs/mongoose';
 import { InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsMongoId, IsIn, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, ArrayUnique, IsArray, IsInt, IsMongoId, IsIn, IsNumber, IsOptional, IsString, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { createHash } from 'node:crypto';
-import { Model } from 'mongoose';
+import { Connection, Model } from 'mongoose';
 import { PriceRange, Product } from '../products/schemas/product.schema';
 import { CatalogQueryDto } from '../catalog/catalog-query.dto';
 import { CartService } from '../cart/cart.service';
 import { producerOffers } from '../catalog/producer-offers';
-import { deliveryMethods, deliveryOptions, deliverySlots, resolveDelivery } from './web-delivery';
+import { deliveryMethods, deliveryOptions, deliverySlots, quoteBasketDelivery, resolveDelivery } from './web-delivery';
 import { MarketplaceAccounts } from './marketplace-account.service';
 import { OrderPersistenceService } from './order-persistence.service';
 
@@ -20,11 +21,30 @@ class OrderLineDto {
   @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,29}$/) unitId?: string;
 }
 
+class DeliveryPointDto {
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) latitude!: number;
+  @ApiProperty() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) longitude!: number;
+}
+
 class DeliveryDto {
   @ApiProperty({ enum: deliveryMethods }) @IsIn(deliveryMethods) method!: string;
-  @ApiProperty() @IsString() @Matches(/^\d{4}-\d{2}-\d{2}$/) dispatchDate!: string;
+  @ApiProperty() @IsString() @Matches(/^\\d{4}-\\d{2}-\\d{2}$/) dispatchDate!: string;
   @ApiProperty({ enum: deliverySlots.map(slot => slot.id) })
   @IsIn(deliverySlots.map(slot => slot.id)) slot!: string;
+  @ApiProperty({ type: DeliveryPointDto }) @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
+}
+
+class DeliveryQuoteLineDto {
+  @IsMongoId() productId!: string;
+  @IsOptional() @IsMongoId() offerId?: string;
+  @IsInt() @Min(1) @Max(Number.MAX_SAFE_INTEGER) quantity!: number;
+  @IsOptional() @IsString() @Matches(/^[a-z0-9][a-z0-9-]{0,29}$/) unitId?: string;
+}
+
+class DeliveryQuoteRequestDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(50) @ValidateNested({ each: true }) @Type(() => DeliveryQuoteLineDto)
+  items!: DeliveryQuoteLineDto[];
+  @ValidateNested() @Type(() => DeliveryPointDto) destination!: DeliveryPointDto;
 }
 
 class WebOrderDto {
@@ -40,9 +60,19 @@ class WebOrderDto {
 @ApiTags('web')
 @Controller('web/delivery-options')
 export class WebDeliveryController {
+  constructor(@InjectConnection() private readonly connection: Connection) {}
+
   @Get()
+  @Header('Cache-Control', 'no-store')
   options() {
-    return { methods: deliveryOptions() };
+    return { methods: [], quoteRequired: true };
+  }
+
+  @Post()
+  @Header('Cache-Control', 'no-store')
+  async quote(@Body() input: DeliveryQuoteRequestDto) {
+    const methods = await quoteBasketDelivery(this.connection.db!, input.items, input.destination);
+    return { methods };
   }
 }
 
@@ -72,7 +102,10 @@ export class WebOrdersController {
         productId: productId.toLowerCase(), quantity, ...(unitId && unitId !== 'unit' && { unitId }),
         ...(offerId && { offerId: offerId.toLowerCase() }),
       }));
-      const requestedDelivery = input.delivery && { method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot };
+      const requestedDelivery = input.delivery && {
+        method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot,
+        destination: input.delivery.destination,
+      };
       const signature = JSON.stringify(requestedDelivery ? { items: request, delivery: requestedDelivery } : request);
       const fromCart = input.cartRevision != null;
       const orderKey = fromCart ? 'cart:' + input.cartRevision : input.requestId;
@@ -145,7 +178,9 @@ export class WebOrdersController {
         };
       });
       await this.orderPersistence.recordWorkflowLog({ orderId: id, stage: 'checkout.products.validated', status: 'succeeded', actorId: member._id, correlationId: input.requestId, details: { itemCount: items.length } });
-      const delivery = requestedDelivery ? resolveDelivery(requestedDelivery) : undefined;
+      const shippingOptions = requestedDelivery
+        ? await quoteBasketDelivery(this.products.db.db!, request, requestedDelivery.destination) : undefined;
+      const delivery = requestedDelivery ? resolveDelivery(requestedDelivery, shippingOptions) : undefined;
       const currency = 'KAR';
       const sum = (bound: keyof PriceRange) => items.reduce((total, item) =>
         total + Math.round(item.price[bound] * 1_000_000) * item.baseQuantity, 0);

@@ -40,8 +40,8 @@ export class TransportZoneTariffsDto {
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) refrigeratedPerKgKar?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) fragileMultiplier?: number;
   @IsOptional() @IsBoolean() hubEnabled?: boolean;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(-90) @Max(90) hubLatitude?: number;
-  @IsOptional() @Type(() => Number) @IsNumber() @Min(-180) @Max(180) hubLongitude?: number;
+  @IsOptional() @Transform(({ value }) => value === null ? null : Number(value)) @IsNumber() @Min(-90) @Max(90) hubLatitude?: number | null;
+  @IsOptional() @Transform(({ value }) => value === null ? null : Number(value)) @IsNumber() @Min(-180) @Max(180) hubLongitude?: number | null;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) hubHandlingKar?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) hubPerKgKar?: number;
   @IsOptional() @IsBoolean() hubSupportsRefrigeration?: boolean;
@@ -57,7 +57,7 @@ export interface TransportZoneTariffRecord {
   densityKgPerM3: number; minimumKar: number; normalMultiplier: number; specialMultiplier: number;
   expressMultiplier: number; urgentMultiplier: number;
   refrigeratedBaseKar: number; refrigeratedPerKgKar: number; fragileMultiplier: number;
-  hubEnabled: boolean; hubLatitude?: number; hubLongitude?: number; hubHandlingKar: number; hubPerKgKar: number;
+  hubEnabled: boolean; hubLatitude?: number | null; hubLongitude?: number | null; hubHandlingKar: number; hubPerKgKar: number;
   hubSupportsRefrigeration: boolean; hubMaxWeightKg: number; hubMaxVolumeM3: number;
   createdAt?: Date; updatedAt?: Date;
 }
@@ -80,7 +80,7 @@ export const defaultTransportZoneTariffs: TransportZoneTariffRecord = {
   stopWeight: 0.1, densityKgPerM3: 250, minimumKar: 2,
   normalMultiplier: 1, specialMultiplier: 1.35, expressMultiplier: 1.8, urgentMultiplier: 2.5,
   refrigeratedBaseKar: 0, refrigeratedPerKgKar: 0, fragileMultiplier: 1.15,
-  hubEnabled: false, hubHandlingKar: 0, hubPerKgKar: 0,
+  hubEnabled: false, hubLatitude: null, hubLongitude: null, hubHandlingKar: 0, hubPerKgKar: 0,
   hubSupportsRefrigeration: false, hubMaxWeightKg: 0, hubMaxVolumeM3: 0,
 };
 

@@ -53,6 +53,11 @@ export class InventoryController {
     return this.inventory.getBalances(warehouseId);
   }
 
+  @Get('staging-balances')
+  getStagingBalances() {
+    return this.inventory.getStagingBalances();
+  }
+
   @Post('orders/:orderId/stage')
   stageOrder(@Param('orderId') orderId: string, @Body() input: StageOrderDto, @Req() { access }: AccessRequest) {
     return this.inventory.stageOrder(orderId, input.sourceWarehouseId, this.actor(access), 'stage:' + orderId);

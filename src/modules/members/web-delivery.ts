@@ -154,6 +154,9 @@ export async function quoteBasketDelivery(
     groups.set(key, current);
   }
 
+  if (totalWeightKg > 100000 || totalVolumeM3 > 10000) {
+    throw new BadRequestException('وزن یا حجم کل سفارش از ظرفیت قابل محاسبه موتور حمل بیشتر است.');
+  }
   const pickups = [...groups.values()];
   const destinationStop = stop('dropoff', 'مقصد مشتری', destination);
   const temperatureBands = new Set(pickups.map(pickup => pickup.temperatureBand));

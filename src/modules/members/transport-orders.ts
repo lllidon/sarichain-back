@@ -29,28 +29,22 @@ export class TransportOrderDto {
   @IsOptional() @IsString() @MaxLength(1000) description?: string;
 }
 
-export class ZoneRateDto {
-  @IsIn(transportZoneIds) zoneId!: typeof transportZoneIds[number];
-  @IsIn(transportUrgencies) speed!: typeof transportUrgencies[number];
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) baseKar!: number;
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) perKmKar!: number;
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 6 }) @Min(0) @Max(1000) perBillableKgKar!: number;
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) stopKar!: number;
-  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) multiplier!: number;
-}
 export class TransportZoneTariffsDto {
-  @IsArray() @ArrayMinSize(24) @ArrayMaxSize(24) @ValidateNested({ each: true }) @Type(() => ZoneRateDto)
-  rates!: ZoneRateDto[];
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) baseKar!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) distanceWeight!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 6 }) @Min(0) @Max(1000) billableWeightWeight!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) stopWeight!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(1) @Max(10000) densityKgPerM3!: number;
   @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0) @Max(10) minimumKar!: number;
-}
-export interface ZoneRateRecord {
-  zoneId: typeof transportZoneIds[number]; speed: typeof transportUrgencies[number];
-  baseKar: number; perKmKar: number; perBillableKgKar: number; stopKar: number; multiplier: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) normalMultiplier!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) specialMultiplier!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) expressMultiplier!: number;
+  @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) urgentMultiplier!: number;
 }
 export interface TransportZoneTariffRecord {
-  _id: string; rates: ZoneRateRecord[]; densityKgPerM3: number; minimumKar: number;
-  createdAt?: Date; updatedAt?: Date;
+  _id: string; baseKar: number; distanceWeight: number; billableWeightWeight: number; stopWeight: number;
+  densityKgPerM3: number; minimumKar: number; normalMultiplier: number; specialMultiplier: number;
+  expressMultiplier: number; urgentMultiplier: number; createdAt?: Date; updatedAt?: Date;
 }
 export const zoneDefinitions = [
   { id: 'zone-0', label: 'زون ۰', minKm: 0, maxKm: 10 },
@@ -66,16 +60,10 @@ export const speedDefinitions = [
   { id: 'express', label: 'اکسپرس', target: 'همان روز' },
   { id: 'urgent', label: 'فوری', target: 'زیر ۳ ساعت' },
 ] as const;
-const zoneMultipliers: Record<typeof transportUrgencies[number], number> = { normal: 1, special: 1.35, express: 1.8, urgent: 2.5 };
 export const defaultTransportZoneTariffs: TransportZoneTariffRecord = {
-  _id: 'default',
-  densityKgPerM3: 250,
-  minimumKar: 2,
-  rates: zoneDefinitions.flatMap((zone, index) => speedDefinitions.map(speed => ({
-    zoneId: zone.id, speed: speed.id, baseKar: 2 + index * 0.5,
-    perKmKar: 0.01 + index * 0.002, perBillableKgKar: 0.0001,
-    stopKar: 0.05, multiplier: zoneMultipliers[speed.id],
-  }))),
+  _id: 'default', baseKar: 2, distanceWeight: 0.02, billableWeightWeight: 0.001,
+  stopWeight: 0.1, densityKgPerM3: 250, minimumKar: 2,
+  normalMultiplier: 1, specialMultiplier: 1.35, expressMultiplier: 1.8, urgentMultiplier: 2.5,
 };
 
 function normalize(value: string) {
@@ -116,11 +104,14 @@ export async function quoteTransportOrder(stops: TransportStopDto[], weightKg: n
   const distanceKm = roadDistanceKm ?? directDistanceKm;
   const zone = zoneForDistance(distanceKm);
   const speed = speedDefinitions.some(item => item.id === urgency) ? urgency as typeof transportUrgencies[number] : 'normal';
-  const rate = tariffs.rates.find(item => item.zoneId === zone.id && item.speed === speed);
-  if (!rate) throw new Error('تعرفه زون و سرعت تحویل تعریف نشده است.');
+  const speedMultiplier = ({
+    normal: tariffs.normalMultiplier, special: tariffs.specialMultiplier,
+    express: tariffs.expressMultiplier, urgent: tariffs.urgentMultiplier,
+  })[speed];
   const stopCount = Math.max(0, stops.length - 2);
-  const raw = rate.baseKar + distanceKm * rate.perKmKar + billableWeightKg * rate.perBillableKgKar + stopCount * rate.stopKar;
-  const standardKar = Math.max(tariffs.minimumKar, Math.round(raw * rate.multiplier * 10000) / 10000);
+  const raw = tariffs.baseKar + distanceKm * tariffs.distanceWeight +
+    billableWeightKg * tariffs.billableWeightWeight + stopCount * tariffs.stopWeight;
+  const standardKar = Math.max(tariffs.minimumKar, Math.round(raw * speedMultiplier * 10000) / 10000);
   return {
     category: classifyTransportRoute(stops), zoneId: zone.id, speed, distanceKm: Math.round(distanceKm * 10) / 10,
     directDistanceKm: Math.round(directDistanceKm * 10) / 10, roadDistanceKm: roadDistanceKm === null ? null : Math.round(roadDistanceKm * 10) / 10,

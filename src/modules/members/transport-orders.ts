@@ -40,7 +40,7 @@ export class TransportZoneTariffsDto {
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) refrigeratedPerKgKar?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 3 }) @Min(0.1) @Max(10) fragileMultiplier?: number;
   @IsOptional() @IsBoolean() hubEnabled?: boolean;
-  @IsOptional() @Transform(({ value }) => value === null ? null : Number(value)) @IsNumber() @Min(-90) @Max(90) hubLatitude?: number | null;
+  @IsOptional() @Transform(({ value }) => value == null ? value : Number(value)) @IsNumber() @Min(-90) @Max(90) hubLatitude?: number | null;
   @IsOptional() @Transform(({ value }) => value === null ? null : Number(value)) @IsNumber() @Min(-180) @Max(180) hubLongitude?: number | null;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(100000000) hubHandlingKar?: number;
   @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 4 }) @Min(0) @Max(1000000) hubPerKgKar?: number;

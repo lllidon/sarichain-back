@@ -173,10 +173,14 @@ export class OrderPersistenceService {
     return this.summary(await orders.findOne({ _id: input.id }));
   }
 
-  async list(memberId: Types.ObjectId, page: number, limit: number) {
+  async list(memberId: Types.ObjectId, page: number, limit: number, status?: string) {
     await this.ensureIndexes();
     const orders = this.db.collection<any>('orders');
-    const filter = { memberId, status: { $ne: 'creating' } };
+    const filter: Record<string, any> = { memberId, status: { $ne: 'creating' } };
+    if (status === 'current') filter.status = { $in: ['pending', 'confirmed', 'awaiting_inventory', 'processing', 'shipped', 'in_transit', 'awaiting_delivery'] };
+    else if (status === 'completed') filter.status = 'completed';
+    else if (status === 'returned') filter.status = { $in: ['returned', 'refunded'] };
+    else if (status === 'cancelled') filter.status = { $in: ['cancelled', 'canceled'] };
     const [headers, total, grouped] = await Promise.all([
       orders.find(filter, { projection: { signature: 0, memberId: 0 } })
         .sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit).toArray(),

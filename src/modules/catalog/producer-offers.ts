@@ -2,7 +2,7 @@ import { Connection, Types } from 'mongoose';
 
 interface OfferEntry {
   memberId: Types.ObjectId;
-  offer: { productId: Types.ObjectId; price: number; stock: number; unit: string; harvestDate?: string };
+  offer: { productId: Types.ObjectId; price: number; stock: number; reservedStock?: number; unit: string; harvestDate?: string };
 }
 
 interface Producer {
@@ -33,7 +33,9 @@ export async function producerOffers(db: NonNullable<Connection['db']>, productI
     const offers = grouped.get(productId) ?? [];
     offers.push({
       id: String(row._id), sellerId: String(row.memberId), name: producer.organization || producer.fullName, city: producer.city,
-      price: row.offer.price, stock: row.offer.stock, unit: row.offer.unit, harvestDate: row.offer.harvestDate,
+      price: row.offer.price, stock: Math.max(0, row.offer.stock - (row.offer.reservedStock ?? 0)),
+      totalStock: row.offer.stock, reservedStock: row.offer.reservedStock ?? 0,
+      unit: row.offer.unit, harvestDate: row.offer.harvestDate,
     });
     grouped.set(productId, offers);
   }
@@ -48,6 +50,8 @@ interface PublicOffer {
   city?: string;
   price: number;
   stock: number;
+  totalStock: number;
+  reservedStock: number;
   unit: string;
   harvestDate?: string;
 }

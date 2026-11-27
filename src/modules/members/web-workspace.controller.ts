@@ -205,12 +205,13 @@ export class WebWorkspaceController {
         continue;
       }
       const updated = await this.entries.updateOne(
-        { _id: id, section: Section.Products, memberId: member._id },
+        { _id: id, section: Section.Products, memberId: member._id,
+          $expr: { $gte: [{ $literal: row.stock }, { $ifNull: ['$offer.reservedStock', 0] }] } },
         { $set: { 'offer.price': row.price, 'offer.stock': row.stock, updatedAt: new Date() } },
       );
       results.push(updated.matchedCount
         ? { id: String(id), success: true }
-        : { id: String(id), success: false, message: 'پیشنهاد فروش متعلق به این حساب نیست یا وجود ندارد.' });
+        : { id: String(id), success: false, message: 'پیشنهاد فروش متعلق به این حساب نیست، وجود ندارد یا موجودی جدید از مقدار رزروشده کمتر است.' });
     }
     return { total: input.rows.length, updated: results.filter(row => row.success).length, results };
   }

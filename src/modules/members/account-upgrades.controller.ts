@@ -187,8 +187,12 @@ export class AccountUpgradesController {
     try {
       const result = await this.requests.insertOne({
         memberId: member._id, kind: 'producer_categories', status: 'pending', documents: [],
-        currentCategoryIds, currentCategoryLabels: currentRows.map(row => String(row.name || '')),
-        requestedCategoryIds, requestedCategoryLabels: categoryRows.map(row => String(row.name || '')),
+        currentCategoryIds,
+        currentCategoryLabels: currentCategoryIds.map((id: string) =>
+          String(currentRows.find(row => String(row._id) === id)?.name || '')),
+        requestedCategoryIds,
+        requestedCategoryLabels: requestedCategoryIds.map((id: string) =>
+          String(categoryRows.find(row => String(row._id) === id)?.name || '')),
         memberSnapshot: { fullName: member.fullName, phone: member.phone, organization: member.organization },
         createdAt: now, updatedAt: now,
       });
@@ -248,14 +252,14 @@ export class AccountUpgradesController {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست تغییر دسته‌بندی فاقد دسته‌بندی معتبر است.');
         await this.members.updateOne({ _id: row.memberId, 'sellerReview.status': 'approved' }, {
-          $set: { allowedProductCategoryIds: categories.map((id: string) => new Types.ObjectId(id)), updatedAt: now },
+          $set: { allowedProductCategoryIds: categories, updatedAt: now },
         });
       } else {
         const categories = Array.isArray(row.requestedCategoryIds) ? row.requestedCategoryIds : [];
         if (!categories.length) throw new BadRequestException('درخواست تولیدکننده دسته‌بندی مجاز ندارد.');
         await this.members.updateOne({ _id: row.memberId }, {
           $set: { producerType: row.producerType, sellerReview: { status: 'approved', reviewedAt: now, reviewedBy: request.userId },
-            allowedProductCategoryIds: categories.map((id: string) => new Types.ObjectId(id)), updatedAt: now },
+            allowedProductCategoryIds: categories, updatedAt: now },
         });
       }
     }

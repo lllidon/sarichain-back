@@ -8,13 +8,11 @@ import { Category } from '../../categories/schemas/category.schema';
 import { ProductsService } from '../../products/products.service';
 import { Product } from '../../products/schemas/product.schema';
 
-import { demoBrands, demoCategories, demoProducts } from './demo-food-catalog';
+import { demoBrands, demoCategories, demoProducts, demoImageUrls } from './demo-food-catalog';
 
-function images(_image: string) {
-  return {
-    imageUrl: '/img/catalog/field.webp',
-    thumbnailUrl: '/img/catalog/field.webp',
-  };
+function images(image: string) {
+  const imageUrl = demoImageUrls[image] ?? demoImageUrls.apple;
+  return { imageUrl, thumbnailUrl: imageUrl, gallery: [imageUrl] };
 }
 
 type RecordIdentity = { _id: Types.ObjectId };
@@ -92,32 +90,20 @@ export class CatalogDemoService {
       if (!categoryId) throw new Error(`Missing demo category: ${category}`);
 
       const sku = `SC-${code}`;
-      const slug = `demo-${image}`;
+      const slug = `demo-product-${code}`;
       const shortDescription = `${form} · ${application}`;
       const master = await ensureRecord(
         () => this.productModel.findOne({ sku, slug, kind: 'master', categoryId }).exec(),
         () => this.products.createMaster({
           name, sku, slug, categoryId, brandId: brandIds[index % brandIds.length],
           ...images(image), shortDescription,
-          description: `${name} برای ${application}، به شکل ${form} و با قیمت پایه به ازای هر ${unit}.`,
+          description: `${name}؛ ${application}؛ بسته‌بندی: ${form}. قیمت نمونه اولیه به ازای هر ${unit}.`,
+          price: { min: price, max: price }, saleUnit: unit,
+          physical: { requiresRefrigeration: ['dairy', 'fish', 'poultry'].includes(String(category)), fragile: false },
           basePrice: { amount: price * 10, currency: 'IRR' },
         }),
       );
 
-      if (index < 10) {
-        const variantSku = `${sku}-P`;
-        const variantSlug = `${slug}-premium`;
-        const priceAdjustment = (Math.round(price * 1.12 / 1000) * 1000 - price) * 10;
-        await ensureRecord(
-          () => this.productModel.findOne({ sku: variantSku, slug: variantSlug, masterId: master._id }).exec(),
-          () => this.products.createVariant({
-            name: `${name} · ممتاز`, sku: variantSku, slug: variantSlug, masterId: master._id,
-            ...images(image), shortDescription,
-            priceAdjustment,
-            options: [{ name: 'درجه کیفی', value: 'ممتاز' }],
-          }),
-        );
-      }
     }
     await runs.updateOne({ _id: runId }, { $setOnInsert: { completedAt: new Date() } }, { upsert: true });
   }

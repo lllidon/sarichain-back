@@ -26,8 +26,7 @@ export type BasketDeliveryQuote = {
   id: typeof deliveryMethods[number];
   label: string;
   fee: number;
-  windows: Array<{ dispatchDate: string; deliveryDate: string }>;
-  slots: typeof deliverySlots;
+  windows: Array<{ dispatchDate: string; deliveryDate: string; slots: typeof deliverySlots[number][] }>;
   routeMode: 'direct' | 'hub';
   distanceKm: number;
   routingPending: boolean;
@@ -156,6 +155,8 @@ export async function quoteBasketDelivery(
   const hub = hubReady ? { latitude: tariffs.hubLatitude!, longitude: tariffs.hubLongitude! } : null;
   const today = dateFormatter.format(now);
   const start = new Date(today + 'T12:00:00Z');
+  const currentHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Tehran', hour: '2-digit', hourCycle: 'h23' }).format(now));
+  const slotStartHour: Record<string, number> = { morning: 9, afternoon: 12, evening: 15 };
 
   const results = await Promise.all(policies.map(async policy => {
     const speedMultiplier = policy.speed === 'normal' ? tariffs.normalMultiplier
@@ -218,12 +219,15 @@ export async function quoteBasketDelivery(
     const coldChainKar = refrigerated ? coldBaseCount * tariffs.refrigeratedBaseKar + coldWeightKg * tariffs.refrigeratedPerKgKar : 0;
     const adjustedTransport = selectedTransport * (fragile ? tariffs.fragileMultiplier : 1);
     const fee = roundKar(adjustedTransport + coldChainKar + handlingKar);
-    const windows = Array.from({ length: 7 }, (_, index) => ({
-      dispatchDate: dayAt(start, index + policy.dispatchOffset),
-      deliveryDate: dayAt(start, index + policy.dispatchOffset + policy.lead),
-    }));
+    const windows = Array.from({ length: 7 }, (_, index) => {
+      const dispatchDate = dayAt(start, index + policy.dispatchOffset);
+      const slots = dispatchDate === today
+        ? deliverySlots.filter(slot => slotStartHour[slot.id] > currentHour)
+        : deliverySlots;
+      return { dispatchDate, deliveryDate: dayAt(start, index + policy.dispatchOffset + policy.lead), slots };
+    });
     return {
-      id: policy.id, label: policy.label, fee, windows, slots: deliverySlots,
+      id: policy.id, label: policy.label, fee, windows,
       routeMode, distanceKm: Math.round(selectedDistance * 10) / 10, routingPending,
       refrigerated, fragile,
       breakdown: { transportKar: roundKar(adjustedTransport), coldChainKar: roundKar(coldChainKar), handlingKar: roundKar(handlingKar) },
@@ -241,7 +245,7 @@ export function resolveDelivery(
   const method = options.find(option => option.id === input.method);
   const slot = deliverySlots.find(option => option.id === input.slot);
   const window = method?.windows.find(option => option.dispatchDate === input.dispatchDate);
-  if (!method || !slot || !window || !Number.isFinite(method.fee) || method.fee < 0) {
+  if (!method || !slot || !window || !window.slots.some(option => option.id === input.slot) || !Number.isFinite(method.fee) || method.fee < 0) {
     throw new BadRequestException('روش یا زمان ارسال معتبر نیست. گزینه‌های ارسال را دوباره بررسی کنید.');
   }
   return {

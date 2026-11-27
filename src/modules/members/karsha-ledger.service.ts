@@ -5,6 +5,7 @@ import { Connection, ClientSession, Types } from 'mongoose';
 const ANNUAL_DECAY_RATE = 0.002;
 const PRECISION = 100_000_000;
 const roundKarsha = (value: number) => Math.round(value * PRECISION) / PRECISION;
+const duplicateKey = (error: unknown) => typeof error === 'object' && error !== null && 'code' in error && error.code === 11000;
 const monthlyRate = 1 - Math.pow(1 - ANNUAL_DECAY_RATE, 1 / 12);
 const addMonthiversary = (anchor: Date, periods: number) => {
   const monthIndex = anchor.getUTCMonth() + periods;
@@ -88,7 +89,8 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     const memberObjectId = new Types.ObjectId(memberId);
     await this.ensureLegacyLot(memberObjectId);
     await this.applyDueForMember(memberObjectId);
-    return this.inTransaction(async session => {
+    try {
+      return await this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
       if (existing) return { duplicate: true, transaction: existing };
       const member = await this.members.findOne({ _id: memberObjectId }, { session });
@@ -107,7 +109,14 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
         idempotencyKey: options.idempotencyKey, createdAt: now, rateTomanPerKarsha: (await this.readPolicy()).rateTomanPerKarsha ?? null };
       await this.ledger.insertOne(transaction, { session });
       return { duplicate: false, transaction, balance };
-    });
+      });
+    } catch (error) {
+      if (duplicateKey(error)) {
+        const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey });
+        if (existing) return { duplicate: true, transaction: existing };
+      }
+      throw error;
+    }
   }
 
   async debit(memberId: string, amount: number, options: { reason: string; actor?: string; idempotencyKey: string; type?: string }) {
@@ -118,7 +127,8 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     const memberObjectId = new Types.ObjectId(memberId);
     await this.ensureLegacyLot(memberObjectId);
     await this.applyDueForMember(memberObjectId);
-    return this.inTransaction(async session => {
+    try {
+      return await this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
       if (existing) return { duplicate: true, transaction: existing };
       const member = await this.members.findOne({ _id: memberObjectId }, { session });
@@ -155,7 +165,14 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
         rateTomanPerKarsha: policy.rateTomanPerKarsha ?? null };
       await this.ledger.insertOne(transaction, { session });
       return { duplicate: false, transaction, balance: balanceAfter };
-    });
+      });
+    } catch (error) {
+      if (duplicateKey(error)) {
+        const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey });
+        if (existing) return { duplicate: true, transaction: existing };
+      }
+      throw error;
+    }
   }
 
   private validateAmount(amount: number) {
@@ -198,7 +215,10 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async ensureLegacyLot(memberId: Types.ObjectId) {
-    await this.inTransaction(async session => {
+    const current = await this.members.findOne({ _id: memberId }, { projection: { karshaBalance: 1 } });
+    if (!current || Number(current.karshaBalance ?? 0) <= 0) return;
+    try {
+      await this.inTransaction(async session => {
       const member = await this.members.findOne({ _id: memberId }, { session });
       if (!member) return;
       const sum = await this.lots.aggregate(
@@ -226,7 +246,10 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
         amount: difference, balanceAfter: balance, reason: 'انتقال موجودی قبلی به دفتر کل کارسا',
         actor: 'system', idempotencyKey: 'legacy-migration:' + memberId.toString() + ':' + now.getTime(),
         createdAt: now, rateTomanPerKarsha: policy.rateTomanPerKarsha ?? null }, { session });
-    });
+      });
+    } catch (error) {
+      if (!duplicateKey(error)) throw error;
+    }
   }
 
   async sweepDueLots() {
@@ -268,6 +291,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
   }
 
   async adminLedger(query: { memberId?: string; page?: number; limit?: number }) {
+    await this.sweepDueLots();
     const filter = query.memberId && Types.ObjectId.isValid(query.memberId) ? { memberId: new Types.ObjectId(query.memberId) } : {};
     const page = query.page ?? 1, limit = query.limit ?? 20;
     const [items, total] = await Promise.all([

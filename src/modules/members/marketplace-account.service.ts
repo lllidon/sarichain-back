@@ -48,6 +48,8 @@ export class MarketplaceAccounts {
       fullName: member.fullName, phone: member.phone, email: member.email, organization: member.organization,
       address: member.address, province: member.province, city: member.city,
       deliveryAddresses: member.deliveryAddresses ?? [],
+      karshaBalance: Number(member.karshaBalance ?? 0),
+      onboardingKarshaAwarded: Boolean(member.onboardingKarshaAwardedAt),
       provinceCode: member.provinceCode, cityCode: member.cityCode, customerType: member.customerType,
       producerType: member.producerType, productionActivity: member.productionActivity,
       allowedProductCategoryIds: member.allowedProductCategoryIds ?? [],

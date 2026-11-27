@@ -106,16 +106,9 @@ export class OrganizationController {
   @Patch('transport-zone-tariffs')
   @UseGuards(AdminGuard)
   async saveTransportZoneTariffs(@Body() input: TransportZoneTariffsDto) {
-    const keys = input.rates.map(rate => rate.zoneId + ':' + rate.speed);
-    const expected = zoneDefinitions.length * speedDefinitions.length;
-    if (keys.length !== expected || new Set(keys).size !== expected ||
-        zoneDefinitions.some(zone => speedDefinitions.some(speed => !keys.includes(zone.id + ':' + speed.id)))) {
-      throw new BadRequestException('برای هر زون و سرعت باید دقیقاً یک تعرفه مستقل ثبت شود.');
-    }
     const now = new Date();
     const record: TransportZoneTariffRecord = {
-      _id: 'default', rates: input.rates, densityKgPerM3: input.densityKgPerM3,
-      minimumKar: input.minimumKar, updatedAt: now,
+      _id: 'default', ...input, updatedAt: now,
     };
     await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs')
       .updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });

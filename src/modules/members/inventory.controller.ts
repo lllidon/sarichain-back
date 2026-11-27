@@ -68,6 +68,20 @@ export class InventoryController {
     return this.inventory.confirmAccountingPosting(orderId, input.externalDocumentId, this.actor(access), 'accounting:' + orderId);
   }
 
+  @Get('movements')
+  getMovements(
+    @Query('orderId') orderId?: string,
+    @Query('productId') productId?: string,
+    @Query('warehouseId') warehouseId?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit === undefined ? 100 : Number(limit);
+    if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 500) {
+      throw new BadRequestException('limit باید عددی بین ۱ تا ۵۰۰ باشد.');
+    }
+    return this.inventory.getMovements({ orderId, productId, warehouseId, limit: parsedLimit });
+  }
+
   @Get('orders/:orderId/logs')
   getOrderLogs(@Param('orderId') orderId: string) {
     return this.inventory.getOrderLogs(orderId);

@@ -1,4 +1,4 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, Header, Headers, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Get, Header, Headers, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { InjectConnection, InjectModel } from '@nestjs/mongoose';
 import { ApiBearerAuth, ApiProperty, ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
@@ -94,6 +94,15 @@ export class WebOrdersController {
   async list(@Headers('authorization') authorization: string | undefined, @Query() { page, limit }: CatalogQueryDto) {
     const member = await this.accounts.requireMember(authorization);
     return this.orderPersistence.list(member._id, page, limit);
+  }
+
+  @Get(':orderId')
+  @Header('Cache-Control', 'private, no-store')
+  async detail(@Headers('authorization') authorization: string | undefined, @Param('orderId') orderId: string) {
+    const member = await this.accounts.requireMember(authorization);
+    const order = await this.orderPersistence.getOrder(member._id, orderId);
+    if (!order) throw new NotFoundException('سفارش پیدا نشد.');
+    return order;
   }
 
   @Post()

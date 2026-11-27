@@ -5,13 +5,15 @@ import { AccessTokenGuard } from '../auth/access-token.guard';
 import { AdminGuard } from '../auth/admin.guard';
 import { OrganizationController } from './organization.controller';
 import { StoreOrdersController } from './store-orders.controller';
+import { OrganizationKarshaController } from './organization-karsha.controller';
+import { KarshaLedgerService } from '../members/karsha-ledger.service';
 import { organizationModels } from './organization.schemas';
 
 @Module({
   imports: [AuthModule, MongooseModule.forFeature(organizationModels)],
   // Register the static store-orders routes before OrganizationController's dynamic :list routes.
-  controllers: [StoreOrdersController, OrganizationController],
-  providers: [AccessTokenGuard, AdminGuard],
-  exports: [MongooseModule],
+  controllers: [StoreOrdersController, OrganizationKarshaController, OrganizationController],
+  providers: [AccessTokenGuard, AdminGuard, KarshaLedgerService],
+  exports: [MongooseModule, KarshaLedgerService],
 })
 export class OrganizationModule {}

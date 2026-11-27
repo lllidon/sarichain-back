@@ -42,6 +42,7 @@ export type BasketDeliveryQuote = {
   fragile: boolean;
   breakdown: { transportKar: number; coldChainKar: number; handlingKar: number };
   routeLabel: string;
+  defaultsApplied: Array<{ productId: string; productName: string; unitWeightKg: number; unitVolumeLiters: number; defaultWeight: boolean; defaultVolume: boolean; densityKgM3: number }>;
 };
 
 function dayAt(start: Date, offset: number) {
@@ -98,6 +99,7 @@ export async function quoteBasketDelivery(
   let totalWeightKg = 0;
   let totalVolumeM3 = 0;
   let coldWeightKg = 0;
+  const defaultsApplied: BasketDeliveryQuote['defaultsApplied'] = [];
   const offerQuantities = new Map<string, number>();
 
   for (const line of lines) {
@@ -130,13 +132,21 @@ export async function quoteBasketDelivery(
     const unitVolume = dimensions
       ? dimensions.lengthMm * dimensions.widthMm * dimensions.heightMm / 1_000_000_000
       : undefined;
-    const unitWeight = typeof physical?.shippingWeightG === 'number' ? physical.shippingWeightG / 1000 : undefined;
-    if (unitVolume === undefined && unitWeight === undefined) {
-      throw new BadRequestException('وزن یا ابعاد حمل یکی از محصولات در مشخصات فیزیکی کاتالوگ ثبت نشده است.');
+    const defaultWeight = typeof physical?.shippingWeightG !== 'number';
+    const unitWeight = defaultWeight ? 1 : physical.shippingWeightG! / 1000;
+    const configuredDensity = physical?.standardDensityKgM3 ?? tariffs.densityKgPerM3;
+    const density = Number.isFinite(configuredDensity) && configuredDensity > 0 ? configuredDensity : 250;
+    const defaultVolume = unitVolume === undefined;
+    const resolvedUnitVolume = unitVolume ?? unitWeight / density;
+    const volumeM3 = resolvedUnitVolume * baseQuantity;
+    const weightKg = unitWeight * baseQuantity;
+    if (defaultWeight || defaultVolume) {
+      defaultsApplied.push({
+        productId: line.productId, productName: product.name || 'محصول',
+        unitWeightKg: unitWeight, unitVolumeLiters: resolvedUnitVolume * 1000,
+        defaultWeight, defaultVolume, densityKgM3: density,
+      });
     }
-    const density = physical?.standardDensityKgM3 ?? tariffs.densityKgPerM3;
-    const volumeM3 = (unitVolume ?? (unitWeight! / density)) * baseQuantity;
-    const weightKg = (unitWeight ?? (unitVolume! * density)) * baseQuantity;
     if (!Number.isFinite(volumeM3) || volumeM3 <= 0 || !Number.isFinite(weightKg) || weightKg <= 0) {
       throw new BadRequestException('مشخصات وزن و حجم یکی از محصولات برای حمل معتبر نیست.');
     }
@@ -251,7 +261,7 @@ export async function quoteBasketDelivery(
       routeMode, distanceKm: Math.round(selectedDistance * 10) / 10, routingPending,
       refrigerated, fragile,
       breakdown: { transportKar: roundKar(adjustedTransport), coldChainKar: roundKar(coldChainKar), handlingKar: roundKar(handlingKar) },
-      routeLabel: routeMode === 'hub' ? 'تجمیع در مرکز ساری‌چین' : 'ارسال مستقیم از تولیدکنندگان',
+      routeLabel: routeMode === 'hub' ? 'تجمیع در مرکز ساری‌چین' : 'ارسال مستقیم از تولیدکنندگان', defaultsApplied,
     };
   }));
   return results;

@@ -91,9 +91,9 @@ export class WebOrdersController {
   ) {}
 
   @Get()
-  async list(@Headers('authorization') authorization: string | undefined, @Query() { page, limit }: CatalogQueryDto) {
+  async list(@Headers('authorization') authorization: string | undefined, @Query() { page, limit }: CatalogQueryDto, @Query('status') status?: string) {
     const member = await this.accounts.requireMember(authorization);
-    return this.orderPersistence.list(member._id, page, limit);
+    return this.orderPersistence.list(member._id, page, limit, status);
   }
 
   @Get(':orderId')

@@ -209,10 +209,11 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     await this.inTransaction(async session => {
       const member = await this.members.findOne({ _id: memberId }, { session });
       if (!member) return;
-      const [sum, existing] = await Promise.all([
-        this.lots.aggregate([{ $match: { memberId } }, { $group: { _id: null, total: { $sum: '$remainingAmount' } } }], { session }).toArray(),
-        this.lots.findOne({ legacyMigrationKey: memberId.toString() }, { session }),
-      ]);
+      const sum = await this.lots.aggregate(
+        [{ $match: { memberId } }, { $group: { _id: null, total: { $sum: '$remainingAmount' } } }],
+        { session },
+      ).toArray();
+      const existing = await this.lots.findOne({ legacyMigrationKey: memberId.toString() }, { session });
       const balance = roundKarsha(Number(member.karshaBalance ?? 0));
       const tracked = roundKarsha(Number(sum[0]?.total ?? 0));
       const difference = roundKarsha(balance - tracked);

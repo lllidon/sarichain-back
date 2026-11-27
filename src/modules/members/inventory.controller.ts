@@ -20,6 +20,9 @@ class OpeningBalanceDto {
 class StageOrderDto {
   @IsString() @MinLength(2) sourceWarehouseId!: string;
 }
+class ReleaseReservationDto {
+  @IsString() @MinLength(3) @MaxLength(500) reason!: string;
+}
 class AccountingPostingDto {
   @IsString() @MinLength(1) @MaxLength(120) externalDocumentId!: string;
 }
@@ -61,6 +64,11 @@ export class InventoryController {
   @Post('orders/:orderId/stage')
   stageOrder(@Param('orderId') orderId: string, @Body() input: StageOrderDto, @Req() { access }: AccessRequest) {
     return this.inventory.stageOrder(orderId, input.sourceWarehouseId, this.actor(access), 'stage:' + orderId);
+  }
+
+  @Post('orders/:orderId/release-staging')
+  releaseStagedOrder(@Param('orderId') orderId: string, @Body() input: ReleaseReservationDto, @Req() { access }: AccessRequest) {
+    return this.inventory.releaseStagedOrder(orderId, input.reason, this.actor(access), 'release:' + orderId);
   }
 
   @Post('orders/:orderId/accounting-posted')

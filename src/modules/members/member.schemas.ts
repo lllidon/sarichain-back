@@ -29,6 +29,7 @@ export class Vehicle {
   @Prop({ required: true, enum: vehicleTypes }) type!: string;
   @Prop({ required: true, trim: true, maxlength: 40 }) plate!: string;
   @Prop({ required: true, trim: true, maxlength: 80 }) license!: string;
+  @Prop({ type: Number, min: 1, max: 50000 }) capacityKg?: number;
 }
 
 const ReviewSchema = SchemaFactory.createForClass(RoleReview);

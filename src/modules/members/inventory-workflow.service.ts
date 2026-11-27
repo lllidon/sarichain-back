@@ -68,7 +68,7 @@ export class InventoryWorkflowService {
     await this.ensureIndexes();
     const safePage = Math.max(1, Math.floor(page));
     const safeLimit = Math.min(100, Math.max(1, Math.floor(limit)));
-    const escaped = [...search.trim()].map(char => '.^$*+?()[]{}|\\\\'.includes(char) ? '\\\\' + char : char).join('');
+    const escaped = [search.trim()].map(char => '.^$*+?()[]{}|\\'.includes(char) ? '\\' + char : char).join('');
     const pipeline: any[] = [
       { $match: { section: 'products', 'offer.productId': { $exists: true } } },
       { $sort: { createdAt: -1, _id: -1 } },

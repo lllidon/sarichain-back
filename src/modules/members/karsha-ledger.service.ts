@@ -46,7 +46,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
   async readPolicy() {
     await this.policies.updateOne({ _id: 'default' }, { $setOnInsert: {
       _id: 'default', annualDecayRate: ANNUAL_DECAY_RATE, monthlyDecayRate: monthlyRate,
-      rateTomanPerKarsha: null, currency: 'IRR', createdAt: new Date(),
+      rateTomanPerKarsha: null, currency: 'TOMAN', createdAt: new Date(),
     } }, { upsert: true });
     const policy = await this.policies.findOne({ _id: 'default' });
     return { ...policy, annualDecayRate: ANNUAL_DECAY_RATE, monthlyDecayRate: monthlyRate };
@@ -87,6 +87,7 @@ export class KarshaLedgerService implements OnModuleInit, OnModuleDestroy {
     }
     const memberObjectId = new Types.ObjectId(memberId);
     await this.ensureLegacyLot(memberObjectId);
+    await this.applyDueForMember(memberObjectId);
     return this.inTransaction(async session => {
       const existing = await this.ledger.findOne({ idempotencyKey: options.idempotencyKey }, { session });
       if (existing) return { duplicate: true, transaction: existing };

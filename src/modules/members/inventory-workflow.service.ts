@@ -92,7 +92,7 @@ export class InventoryWorkflowService {
           }
           throw new ConflictException('برای این سفارش رزرو یا انتقال نیمه‌تمام وجود دارد؛ ابتدا مغایرت‌یابی کنید.');
         }
-        const items = await this.db.collection('orderItems').find({ orderId }).sort({ lineNumber: 1 }).session(session).toArray();
+        const items = await this.db.collection('orderItems').find({ orderId }, { session }).sort({ lineNumber: 1 }).toArray();
         if (!items.length) throw new ConflictException('سفارش فاقد ردیف محصول است.');
         await this.log(session, { orderId, stage: 'inventory.staging.started', status: 'started', actor, correlationId, details: { sourceWarehouseId, itemCount: items.length } });
         for (const item of items) {
@@ -124,6 +124,12 @@ export class InventoryWorkflowService {
             actor, correlationId, occurredAt: new Date(), schemaVersion: 1,
           }, { session });
         }
+        await this.db.collection('accountingOutbox').updateOne(
+          { _id: 'order:' + orderId },
+          { $setOnInsert: { orderId, eventType: 'order.inventory.staged', status: 'pending',
+            attempts: 0, createdAt: new Date(), schemaVersion: 1 } },
+          { upsert: true, session },
+        );
         await orders.updateOne({ _id: orderId }, { $set: { inventoryStatus: 'staged', updatedAt: new Date() } }, { session });
         await this.log(session, { orderId, stage: 'inventory.staging.completed', status: 'succeeded', actor, correlationId, details: { sourceWarehouseId, stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length } });
         result = { orderId, status: 'staged', stagingWarehouseId: STAGING_WAREHOUSE_ID, itemCount: items.length };

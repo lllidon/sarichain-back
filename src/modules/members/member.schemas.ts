@@ -11,6 +11,20 @@ export class RoleReview {
 }
 
 @Schema({ _id: false })
+export class DeliveryAddress {
+  @Prop({ required: true, trim: true, maxlength: 40 }) id!: string;
+  @Prop({ required: true, trim: true, maxlength: 80 }) title!: string;
+  @Prop({ required: true, trim: true, maxlength: 160 }) recipientName!: string;
+  @Prop({ trim: true, maxlength: 32 }) phone?: string;
+  @Prop({ required: true, trim: true, maxlength: 500 }) address!: string;
+  @Prop({ trim: true, maxlength: 100 }) province?: string;
+  @Prop({ trim: true, maxlength: 100 }) city?: string;
+  @Prop({ trim: true, maxlength: 20 }) postalCode?: string;
+  @Prop({ min: -90, max: 90 }) latitude?: number;
+  @Prop({ min: -180, max: 180 }) longitude?: number;
+}
+
+@Schema({ _id: false })
 export class Vehicle {
   @Prop({ required: true, enum: vehicleTypes }) type!: string;
   @Prop({ required: true, trim: true, maxlength: 40 }) plate!: string;
@@ -34,6 +48,7 @@ export class MarketplaceMember extends MemberProfile {
   @Prop({ type: [String], default: [] }) allowedProductCategoryIds!: string[];
   @Prop({ type: ReviewSchema }) driverReview?: RoleReview;
   @Prop({ type: ReviewSchema }) specialistReview?: RoleReview;
+  @Prop({ type: [SchemaFactory.createForClass(DeliveryAddress)], default: [] }) deliveryAddresses!: DeliveryAddress[];
 }
 
 const MarketplaceMemberSchema = SchemaFactory.createForClass(MarketplaceMember);

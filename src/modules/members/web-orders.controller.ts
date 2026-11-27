@@ -106,7 +106,8 @@ export class WebOrdersController {
       }));
       const requestedDelivery = input.delivery && {
         method: input.delivery.method, dispatchDate: input.delivery.dispatchDate, slot: input.delivery.slot,
-        destination: input.delivery.destination,
+        destination: input.delivery.destination, quotedFee: input.delivery.quotedFee,
+        quotedRouteMode: input.delivery.quotedRouteMode, quotedDistanceKm: input.delivery.quotedDistanceKm,
       };
       const signature = JSON.stringify(requestedDelivery ? { items: request, delivery: requestedDelivery } : request);
       const fromCart = input.cartRevision != null;

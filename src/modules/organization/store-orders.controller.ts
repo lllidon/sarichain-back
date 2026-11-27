@@ -44,7 +44,8 @@ const DEFAULT_BOARD_CONFIG = {
     ] },
   ],
 };
-\nconst fromMinor = (value: any) => typeof value === 'number' ? value / 1_000_000 : 0;
+
+const fromMinor = (value: any) => typeof value === 'number' ? value / 1_000_000 : 0;
 const toMinor = (value: number) => {
   const result = Math.round(value * 1_000_000);
   if (!Number.isSafeInteger(result)) throw new BadRequestException('مبلغ سفارش معتبر نیست.');

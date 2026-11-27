@@ -110,7 +110,7 @@ export class OrganizationController {
   async saveTransportZoneTariffs(@Body() input: TransportZoneTariffsDto) {
     const now = new Date();
     const record: TransportZoneTariffRecord = {
-      _id: 'default', ...input, updatedAt: now,
+      ...defaultTransportZoneTariffs, _id: 'default', ...input, updatedAt: now,
     };
     await this.connection.db!.collection<TransportZoneTariffRecord>('transport_zone_tariffs')
       .updateOne({ _id: 'default' }, { $set: record, $setOnInsert: { createdAt: now } }, { upsert: true });

@@ -44,7 +44,7 @@ All prices are calculated and rounded on the backend. At checkout, the backend r
 
 - `POST /web/delivery-options`: accepts `items[]` and `destination{latitude,longitude}`; returns the four computed options and their price breakdown, route mode, distance and date windows.
 - `POST /web/orders`: delivery selection includes method, dispatch date, slot, destination and the quote snapshot (`quotedFee`, `quotedRouteMode`, `quotedDistanceKm`). The backend recomputes before persistence.
-- `GET /web/delivery-options` intentionally returns `quoteRequired: true`; a cart-specific quote cannot be generated without cart lines and destination.
+- `GET /web/delivery-options` retains the previous three fixed-fee methods for old storefront clients during staged rollout. The updated cart uses `POST` for cart-specific quotes. Legacy order submissions without destination coordinates remain accepted; new quote-backed orders are revalidated.
 
 ## Admin configuration
 

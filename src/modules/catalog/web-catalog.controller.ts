@@ -26,6 +26,25 @@ export class WebCatalogController {
     return { ...page, items: await this.withVariants(page.items) };
   }
 
+  @Get('products/by-ids')
+  async productsByIds(@Query('ids') rawIds?: string) {
+    const ids = [...new Set((rawIds ?? '').split(',').filter(isObjectIdOrHexString))].slice(0, 100);
+    if (!ids.length) return { items: [] };
+
+    const selected = await this.products.find({ _id: { $in: ids }, isActive: true })
+      .select(productFields).lean();
+    const masterIds = [...new Set(selected.map(product =>
+      product.kind === 'master' ? String(product._id) : product.masterId ? String(product.masterId) : '',
+    ).filter(Boolean))];
+    if (!masterIds.length) return { items: [] };
+
+    const masters = await this.products.find({
+      _id: { $in: masterIds }, kind: 'master', isActive: true,
+    }).select(productFields).lean();
+
+    return { items: await this.withVariants(masters) };
+  }
+
   @Get('products/:id')
   async product(@Param('id') id: string) {
     if (!isObjectIdOrHexString(id)) throw new NotFoundException();

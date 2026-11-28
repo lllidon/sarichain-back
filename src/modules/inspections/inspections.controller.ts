@@ -79,7 +79,7 @@ export class OrganizationInspectionsController {
     }
   }
 
-  @Get()
+  @Get('overview')
   @Header('Cache-Control', 'private, no-store')
   async overview(@Req() request: AccessRequest) {
     this.authorize(request);

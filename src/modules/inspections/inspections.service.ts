@@ -208,7 +208,7 @@ export class InspectionsService implements OnModuleInit {
     const rejected = (request.rejectedInspectorIds || []).map((id: any) => new Types.ObjectId(id));
     const profiles = await this.profiles.find({
       status: 'approved', isActive: { $ne: false }, memberId: { $nin: [request.producerMemberId, ...rejected] },
-      specialties: { $in: [request.inspectionType, 'all-crops'] },
+      specialties: { $in: [request.inspectionType, 'all-crops', 'crop_quality'] },
     }).toArray();
     const eligible: Array<{ profile: any; distance: number; activeCount: number; weight: number }> = [];
     for (const profile of profiles) {
@@ -376,14 +376,21 @@ export class InspectionsService implements OnModuleInit {
       serviceRadiusKm: row.serviceRadiusKm, biography: row.biography, submittedAt: row.submittedAt,
       member: memberMap.get(String(row.memberId)),
     }));
-    const reportsView = reports.map(row => ({
-      id: String(row._id), requestId: String(row.requestId), assignmentId: String(row.assignmentId),
-      inspectorMemberId: String(row.inspectorMemberId), qualityScore: row.qualityScore,
-      qualityGrade: row.qualityGrade, observations: row.observations,
-      pesticideAssessment: row.pesticideAssessment, fertilizerAssessment: row.fertilizerAssessment,
-      recommendations: row.recommendations, estimatedYieldKg: row.estimatedYieldKg,
-      photoIds: (row.photoIds || []).map((id: any) => String(id)), createdAt: row.createdAt,
-      inspector: memberMap.get(String(row.inspectorMemberId)),
+    const reportsView = await Promise.all(reports.map(async row => {
+      const photos = await this.photos.find({ reportId: row._id }).toArray();
+      return {
+        id: String(row._id), requestId: String(row.requestId), assignmentId: String(row.assignmentId),
+        inspectorMemberId: String(row.inspectorMemberId), qualityScore: row.qualityScore,
+        qualityGrade: row.qualityGrade, observations: row.observations,
+        pesticideAssessment: row.pesticideAssessment, fertilizerAssessment: row.fertilizerAssessment,
+        recommendations: row.recommendations, estimatedYieldKg: row.estimatedYieldKg,
+        photoIds: photos.map(photo => String(photo._id)),
+        photos: photos.map(photo => ({
+          id: String(photo._id),
+          dataUrl: 'data:' + photo.mimeType + ';base64,' + photo.data.value().toString('base64'),
+        })),
+        createdAt: row.createdAt, inspector: memberMap.get(String(row.inspectorMemberId)),
+      };
     }));
     return {
       applications: applicationsView,

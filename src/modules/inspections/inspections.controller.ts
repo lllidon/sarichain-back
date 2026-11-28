@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Body, Controller, Get, Headers, Header, Param, Patch, Post,
+  BadRequestException, Body, Controller, ForbiddenException, Get, Headers, Header, Param, Patch, Post,
   Req, StreamableFile, UploadedFiles, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { InjectConnection } from '@nestjs/mongoose';
@@ -75,7 +75,7 @@ export class OrganizationInspectionsController {
 
   private authorize(request: AccessRequest) {
     if (!['management', 'admin'].includes(request.access?.role || '')) {
-      throw new BadRequestException('دسترسی مدیریت لازم است.');
+      throw new ForbiddenException('دسترسی مدیریت لازم است.');
     }
   }
 

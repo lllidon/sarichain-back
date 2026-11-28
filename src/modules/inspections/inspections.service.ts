@@ -60,6 +60,8 @@ export class InspectionsService implements OnModuleInit {
     await this.db.collection('inspection_policies').updateOne({ _id: 'default' }, {
       $setOnInsert: {
         _id: 'default', baseKarsha: 3, perHectareKarsha: 1.5, perThousandKgKarsha: 0.25,
+        typeMultipliers: { orchard: 1.15, farmland: 1, greenhouse: 1.3, nursery: 1.1 },
+        historyMultiplier: 1.05, varietyMultiplier: 0.02,
         maxActiveAssignments: 4, nearestPoolSize: 5, offerMinutes: 90, updatedAt: new Date(),
       },
     }, { upsert: true });
@@ -119,6 +121,7 @@ export class InspectionsService implements OnModuleInit {
       pesticideNotes: row.pesticideNotes, fertilizerNotes: row.fertilizerNotes, notes: row.notes,
       availability: row.availability, rewardKarsha: row.rewardKarsha, createdAt: row.createdAt,
       assignmentId: row.assignmentId ? String(row.assignmentId) : undefined,
+      scheduledVisit: row.scheduledVisit,
       reportId: row.reportId ? String(row.reportId) : undefined,
       reviewNote: row.reviewNote,
     };
@@ -181,8 +184,13 @@ export class InspectionsService implements OnModuleInit {
       }
     }
     const policy = await this.policy();
+    const historyProductionKg = Math.max(expectedProductionKg || 0, previousProductionKg || 0);
+    const varietyCount = cleanText(input.varieties, 300).split(/[،,؛;]/).map((item: string) => item.trim()).filter(Boolean).length;
+    const typeMultiplier = Number(policy.typeMultipliers?.[inspectionType] || 1);
+    const historyMultiplier = previousProductionKg ? Number(policy.historyMultiplier || 1) : 1;
+    const varietyMultiplier = 1 + Math.min(5, varietyCount) * Number(policy.varietyMultiplier || 0);
     const rewardKarsha = Math.round((Number(policy.baseKarsha) + acreage * Number(policy.perHectareKarsha) +
-      (expectedProductionKg || 0) / 1000 * Number(policy.perThousandKgKarsha)) * 100000000) / 100000000;
+      historyProductionKg / 1000 * Number(policy.perThousandKgKarsha)) * typeMultiplier * historyMultiplier * varietyMultiplier * 100000000) / 100000000;
     const now = new Date();
     const document = {
       producerMemberId: memberId, locationId: location._id, locationTitle: location.title,
@@ -330,10 +338,10 @@ export class InspectionsService implements OnModuleInit {
     if (report.estimatedYieldKg !== null && (!Number.isFinite(report.estimatedYieldKg) || report.estimatedYieldKg < 0 || report.estimatedYieldKg > 1_000_000_000)) {
       throw new BadRequestException('برآورد تولید باید عددی معتبر بر حسب کیلوگرم باشد.');
     }
+    const preparedImages = await Promise.all(files.map(file => prepareUploadedImage(file.buffer)));
     const result = await this.reports.insertOne(report);
     const photoIds: Types.ObjectId[] = [];
-    for (const file of files) {
-      const image = await prepareUploadedImage(file.buffer);
+    for (const image of preparedImages) {
       const photo = await this.photos.insertOne({
         reportId: result.insertedId, data: new mongo.Binary(image.data), mimeType: image.type, createdAt: new Date(),
       });
@@ -460,15 +468,22 @@ export class InspectionsService implements OnModuleInit {
   async savePolicy(input: Record<string, any>) {
     const fields = ['baseKarsha', 'perHectareKarsha', 'perThousandKgKarsha', 'maxActiveAssignments', 'nearestPoolSize', 'offerMinutes'];
     const numeric = Object.fromEntries(fields.map(key => [key, Number(input[key])]));
-    const valid = Number.isFinite(numeric.baseKarsha) && numeric.baseKarsha >= 0 && numeric.baseKarsha <= 100000 &&
+    const types = ['orchard', 'farmland', 'greenhouse', 'nursery'];
+    const typeMultipliers = Object.fromEntries(types.map(key => [key, Number(input.typeMultipliers?.[key])]));
+    const valid = Number.isFinite(numeric.baseKarsha) && numeric.baseKarsha > 0 && numeric.baseKarsha <= 100000 &&
       Number.isFinite(numeric.perHectareKarsha) && numeric.perHectareKarsha >= 0 && numeric.perHectareKarsha <= 100000 &&
       Number.isFinite(numeric.perThousandKgKarsha) && numeric.perThousandKgKarsha >= 0 && numeric.perThousandKgKarsha <= 100000 &&
+      Number.isFinite(Number(input.historyMultiplier)) && Number(input.historyMultiplier) >= 1 && Number(input.historyMultiplier) <= 3 &&
+      Number.isFinite(Number(input.varietyMultiplier)) && Number(input.varietyMultiplier) >= 0 && Number(input.varietyMultiplier) <= 0.5 &&
+      types.every(key => Number.isFinite(typeMultipliers[key]) && typeMultipliers[key] >= 0.5 && typeMultipliers[key] <= 3) &&
       Number.isInteger(numeric.maxActiveAssignments) && numeric.maxActiveAssignments >= 1 && numeric.maxActiveAssignments <= 50 &&
       Number.isInteger(numeric.nearestPoolSize) && numeric.nearestPoolSize >= 1 && numeric.nearestPoolSize <= 10 &&
       Number.isInteger(numeric.offerMinutes) && numeric.offerMinutes >= 5 && numeric.offerMinutes <= 1440;
     if (!valid) throw new BadRequestException('مقادیر سیاست نظارت معتبر نیستند.');
     await this.db.collection('inspection_policies').updateOne({ _id: 'default' }, {
-      $set: { ...numeric, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() },
+      $set: { ...numeric, typeMultipliers, historyMultiplier: Number(input.historyMultiplier),
+        varietyMultiplier: Number(input.varietyMultiplier), updatedAt: new Date() },
+      $setOnInsert: { createdAt: new Date() },
     }, { upsert: true });
     return this.policy();
   }

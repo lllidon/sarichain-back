@@ -472,7 +472,7 @@ export class InspectionsService implements OnModuleInit {
       });
       await this.assignments.updateOne({ _id: report.assignmentId }, { $set: { status: 'accepted', reviewNote: cleanText(note, 500) } });
       await this.requests.updateOne({ _id: request._id, status: 'pending_review' }, {
-        $set: { status: 'scheduled', reviewNote: cleanText(note, 500), updatedAt: now },
+        $set: { status: 'revision_required', reviewNote: cleanText(note, 500), updatedAt: now },
       });
     }
     return { id: requestId, status };

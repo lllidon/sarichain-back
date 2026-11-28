@@ -394,6 +394,7 @@ export class InspectionsService implements OnModuleInit {
       projection: { fullName: 1, phone: 1, organization: 1, city: 1, province: 1 },
     }).toArray() : [];
     const memberMap = new Map(members.map(row => [String(row._id), row]));
+    const requestMap = new Map(requests.map(row => [String(row._id), row]));
     const applicationsView = applications.map(row => ({
       memberId: String(row.memberId), specialties: row.specialties, baseLocation: row.baseLocation,
       serviceRadiusKm: row.serviceRadiusKm, biography: row.biography, submittedAt: row.submittedAt,
@@ -413,6 +414,7 @@ export class InspectionsService implements OnModuleInit {
           dataUrl: 'data:' + photo.mimeType + ';base64,' + photo.data.value().toString('base64'),
         })),
         createdAt: row.createdAt, inspector: memberMap.get(String(row.inspectorMemberId)),
+        request: this.publicRequest(requestMap.get(String(row.requestId))),
       };
     }));
     return {

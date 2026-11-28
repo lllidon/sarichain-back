@@ -16,6 +16,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
   app.useStaticAssets(join(__dirname, '..', 'public', 'catalog-demo'), { prefix: '/catalog-demo/' });
   app.useStaticAssets(join(__dirname, '..', 'public', 'catalog-demo'), { prefix: '/web/catalog-demo/' });
+  app.useStaticAssets(join(__dirname, '..', 'public', 'uploads'), { prefix: '/uploads/' });
   app.useGlobalPipes(new ValidationPipe({
     transform: true,
     whitelist: true,

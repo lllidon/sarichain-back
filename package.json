@@ -10,7 +10,8 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "auth:create-user": "node dist/scripts/create-user.js",
-    "catalog:seed": "npm run build && node dist/scripts/seed-catalog.js"
+    "catalog:seed": "npm run build && node dist/scripts/seed-catalog.js",
+    "catalog:download-images": "npm run build && node dist/scripts/download-catalog-images.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.11",

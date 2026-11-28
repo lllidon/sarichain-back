@@ -78,6 +78,13 @@ flowchart TD
 - Related website flow: `sarichain-web/docs/KNOWLEDGE_GRAPH.md`. Related review UI: `sarichain-panel/docs/KNOWLEDGE_GRAPH.md`.
 - Deployment note: the backend route and authorization fix are source changes on `main`; the running API must be rebuilt/restarted before the fix is effective in production.
 
+## Seller fulfillment build compatibility
+
+- `src/modules/members/seller-fulfillment.service.ts` builds a unique buyer/member ID list from order rows before loading buyer profiles.
+- The intermediate collection is a JavaScript `Set<string>`; it must be converted to an array before calling array methods such as `filter` and `map`. Current implementation uses `Array.from(new Set(...))`, then explicitly types the string callback parameters and converts valid values to `Types.ObjectId`.
+- This fixes the deployment TypeScript errors TS2339 (`filter` does not exist on `Set<string>`) and TS7006 (implicit `any` for `id`). Merged to `main` in backend PR #8.
+- When local builds pass but deployment fails on this line, compare the deployed checkout/commit with `origin/main`; the source being built may differ from the current local tree or may be stale. Confirm the deployed commit contains the `Array.from(new Set(...))` expression.
+
 ## API consumers
 - `sarichain-panel`: `/auth`, `/catalog`, `/members`, `/directory`, `/locations`, `/organization`, inventory and transport endpoints.
 - `sarichain-web`: public `/web/products`, `/web/categories`, `/web/brands`; authenticated `/web/login`, profile, orders, delivery, workspace, transport and location endpoints.

@@ -9,7 +9,6 @@ import { AppModule } from '../app.module';
 import { demoCategories, demoProducts, demoImageUrls } from '../modules/catalog/demo/demo-food-catalog';
 
 const ROOT = join(process.cwd(), 'public', 'uploads');
-const ORIGIN = (process.env.PUBLIC_BACKEND_ORIGIN || 'https://admin.dehaat.ir').replace(/\\/+$/, '');
 const MAX_BYTES = 12 * 1024 * 1024;
 const stats = { categories: 0, products: 0, skipped: 0, failed: 0 };
 
@@ -46,7 +45,7 @@ async function saveImage(folder: 'products' | 'category', filename: string, url:
   const temporary = target + '.tmp';
   await writeFile(temporary, await downloadImage(url));
   await rename(temporary, target);
-  return `${ORIGIN}/uploads/${folder}/${safeName}.webp`;
+  return `/uploads/${folder}/${safeName}.webp`;
 }
 
 async function main() {

@@ -85,6 +85,13 @@ flowchart TD
 - This fixes the deployment TypeScript errors TS2339 (`filter` does not exist on `Set<string>`) and TS7006 (implicit `any` for `id`). Merged to `main` in backend PR #8.
 - When local builds pass but deployment fails on this line, compare the deployed checkout/commit with `origin/main`; the source being built may differ from the current local tree or may be stale. Confirm the deployed commit contains the `Array.from(new Set(...))` expression.
 
+## Local catalog image storage
+
+- `src/scripts/download-catalog-images.ts` downloads demo catalog product and category images, converts them to optimized WebP, and writes them under `public/uploads/products/` and `public/uploads/category/`.
+- MongoDB image fields must store relative paths only, e.g. `/uploads/products/SC-1001.webp` and `/uploads/category/demo-fresh-produce.webp`; do not persist a host/domain or environment-specific absolute URL.
+- `src/main.ts` serves the uploads directory at the `/uploads/` URL prefix. The frontend resolves the relative path against its configured backend base URL (currently `https://admin.dehaat.ir`).
+- Run with `npm run catalog:download-images`. The command builds the backend and runs the downloader. Re-running refreshes the local files and demo catalog image paths.
+
 ## API consumers
 - `sarichain-panel`: `/auth`, `/catalog`, `/members`, `/directory`, `/locations`, `/organization`, inventory and transport endpoints.
 - `sarichain-web`: public `/web/products`, `/web/categories`, `/web/brands`; authenticated `/web/login`, profile, orders, delivery, workspace, transport and location endpoints.

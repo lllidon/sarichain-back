@@ -10,6 +10,12 @@ const activeAssignmentStates = ['offered', 'accepted', 'report_submitted'];
 const earthRadiusKm = 6371.0088;
 
 type Coordinates = { latitude: number; longitude: number };
+type ProductionLocation = Coordinates & {
+  type: typeof locationTypes[number];
+  city?: string;
+  province?: string;
+};
+type InspectionPolicyDocument = { _id: string; [key: string]: any };
 const validCoordinates = (value: any): value is Coordinates =>
   value && Number.isFinite(value.latitude) && value.latitude >= -90 && value.latitude <= 90 &&
   Number.isFinite(value.longitude) && value.longitude >= -180 && value.longitude <= 180;
@@ -42,6 +48,7 @@ export class InspectionsService implements OnModuleInit {
   private get photos() { return this.db.collection('inspection_report_photos'); }
   private get locations() { return this.db.collection('web_workspace_entries'); }
   private get members() { return this.db.collection('members'); }
+  private get policies() { return this.db.collection<InspectionPolicyDocument>('inspection_policies'); }
 
   async onModuleInit() {
     await Promise.all([
@@ -57,7 +64,7 @@ export class InspectionsService implements OnModuleInit {
   }
 
   private async policy() {
-    await this.db.collection('inspection_policies').updateOne({ _id: 'default' }, {
+    await this.policies.updateOne({ _id: 'default' }, {
       $setOnInsert: {
         _id: 'default', baseKarsha: 3, perHectareKarsha: 1.5, perThousandKgKarsha: 0.25,
         typeMultipliers: { orchard: 1.15, farmland: 1, greenhouse: 1.3, nursery: 1.1 },
@@ -65,7 +72,7 @@ export class InspectionsService implements OnModuleInit {
         maxActiveAssignments: 4, nearestPoolSize: 5, offerMinutes: 90, updatedAt: new Date(),
       },
     }, { upsert: true });
-    return (await this.db.collection('inspection_policies').findOne({ _id: 'default' }))!;
+    return (await this.policies.findOne({ _id: 'default' }))!;
   }
 
   private async snapshot(memberId: Types.ObjectId) {
@@ -98,16 +105,26 @@ export class InspectionsService implements OnModuleInit {
       const candidates = await this.locations.find({
         section: 'orchards', memberId: { $ne: memberId },
       }, { projection: { title: 1, location: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(2000).toArray();
-      nearbyLocations = candidates.filter(row => validCoordinates(row.location) &&
-        locationTypes.includes(row.location.type) &&
-        (profile.specialties?.includes('all-crops') || profile.specialties?.includes('crop_quality') || profile.specialties?.includes(row.location.type)))
-        .map(row => ({ row, distance: distanceKm(profile.baseLocation, row.location) }))
-        .filter(item => item.distance <= Number(profile.serviceRadiusKm || 0))
+      const eligibleSites: Array<{ row: any; location: ProductionLocation; distance: number }> = [];
+      for (const row of candidates) {
+        const location = row.location;
+        if (!validCoordinates(location) || !locationTypes.includes(location.type as typeof locationTypes[number])) continue;
+        const productionLocation = location as ProductionLocation;
+        const matchesSpecialty = profile.specialties?.includes('all-crops') ||
+          profile.specialties?.includes('crop_quality') ||
+          profile.specialties?.includes(productionLocation.type);
+        if (!matchesSpecialty) continue;
+        const distance = distanceKm(profile.baseLocation, productionLocation);
+        if (distance <= Number(profile.serviceRadiusKm || 0)) {
+          eligibleSites.push({ row, location: productionLocation, distance });
+        }
+      }
+      nearbyLocations = eligibleSites
         .sort((a, b) => a.distance - b.distance).slice(0, 50)
-        .map(({ row, distance }) => ({
-          id: String(row._id), title: row.title, type: row.location.type,
-          city: row.location.city, province: row.location.province,
-          latitude: row.location.latitude, longitude: row.location.longitude,
+        .map(({ row, location, distance }) => ({
+          id: String(row._id), title: row.title, type: location.type,
+          city: location.city, province: location.province,
+          latitude: location.latitude, longitude: location.longitude,
           distanceKm: Math.round(distance * 10) / 10,
         }));
     }
@@ -525,7 +542,7 @@ export class InspectionsService implements OnModuleInit {
       Number.isInteger(numeric.nearestPoolSize) && numeric.nearestPoolSize >= 1 && numeric.nearestPoolSize <= 10 &&
       Number.isInteger(numeric.offerMinutes) && numeric.offerMinutes >= 5 && numeric.offerMinutes <= 1440;
     if (!valid) throw new BadRequestException('مقادیر سیاست نظارت معتبر نیستند.');
-    await this.db.collection('inspection_policies').updateOne({ _id: 'default' }, {
+    await this.policies.updateOne({ _id: 'default' }, {
       $set: { ...numeric, typeMultipliers, historyMultiplier: Number(input.historyMultiplier),
         varietyMultiplier: Number(input.varietyMultiplier), updatedAt: new Date() },
       $setOnInsert: { createdAt: new Date() },

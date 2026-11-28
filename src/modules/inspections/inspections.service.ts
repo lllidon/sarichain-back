@@ -19,6 +19,8 @@ type InspectionPolicyDocument = { _id: string; [key: string]: any };
 const validCoordinates = (value: any): value is Coordinates =>
   value && Number.isFinite(value.latitude) && value.latitude >= -90 && value.latitude <= 90 &&
   Number.isFinite(value.longitude) && value.longitude >= -180 && value.longitude <= 180;
+const validProductionLocation = (value: any): value is ProductionLocation =>
+  validCoordinates(value) && locationTypes.includes(value.type);
 
 function distanceKm(a: Coordinates, b: Coordinates) {
   const radians = (value: number) => value * Math.PI / 180;
@@ -108,8 +110,8 @@ export class InspectionsService implements OnModuleInit {
       const eligibleSites: Array<{ row: any; location: ProductionLocation; distance: number }> = [];
       for (const row of candidates) {
         const location = row.location;
-        if (!validCoordinates(location) || !locationTypes.includes(location.type as typeof locationTypes[number])) continue;
-        const productionLocation = location as ProductionLocation;
+        if (!validProductionLocation(location)) continue;
+        const productionLocation = location;
         const matchesSpecialty = profile.specialties?.includes('all-crops') ||
           profile.specialties?.includes('crop_quality') ||
           profile.specialties?.includes(productionLocation.type);

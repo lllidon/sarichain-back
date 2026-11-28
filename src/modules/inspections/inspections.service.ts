@@ -98,7 +98,9 @@ export class InspectionsService implements OnModuleInit {
       const candidates = await this.locations.find({
         section: 'orchards', memberId: { $ne: memberId },
       }, { projection: { title: 1, location: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(2000).toArray();
-      nearbyLocations = candidates.filter(row => validCoordinates(row.location))
+      nearbyLocations = candidates.filter(row => validCoordinates(row.location) &&
+        locationTypes.includes(row.location.type) &&
+        (profile.specialties?.includes('all-crops') || profile.specialties?.includes('crop_quality') || profile.specialties?.includes(row.location.type)))
         .map(row => ({ row, distance: distanceKm(profile.baseLocation, row.location) }))
         .filter(item => item.distance <= Number(profile.serviceRadiusKm || 0))
         .sort((a, b) => a.distance - b.distance).slice(0, 50)

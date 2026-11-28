@@ -31,5 +31,6 @@ import { SellerFulfillmentService } from './seller-fulfillment.service';
   imports: [CartModule, ProductsModule, AuthModule, OrganizationModule, LocationsModule, ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]), MongooseModule.forFeature(memberModels)],
   controllers: [MembersController, MarketplaceAccountController, MarketplaceKarshaController, AccountUpgradesController, WebOrdersController, WebDeliveryController, SellerFulfillmentController, WebWorkspaceController, WebTransportOrdersController, WebCartController, WebWeeklyBasketController, InventoryController],
   providers: [MembersService, AccessTokenGuard, AdminGuard, MarketplaceAccounts, MarketplaceMigration, OrderPersistenceService, InventoryWorkflowService, SellerFulfillmentService],
+  exports: [MarketplaceAccounts],
 })
 export class MembersModule {}

@@ -93,11 +93,28 @@ export class InspectionsService implements OnModuleInit {
     const assignedRequests = requestIds.length
       ? await this.requests.find({ _id: { $in: requestIds } }).toArray() : [];
     const byId = new Map(assignedRequests.map(row => [String(row._id), row]));
+    let nearbyLocations: Array<Record<string, any>> = [];
+    if (profile?.status === 'approved') {
+      const candidates = await this.locations.find({
+        section: 'orchards', memberId: { $ne: memberId },
+      }, { projection: { title: 1, location: 1, createdAt: 1 } }).sort({ createdAt: -1 }).limit(2000).toArray();
+      nearbyLocations = candidates.filter(row => validCoordinates(row.location))
+        .map(row => ({ row, distance: distanceKm(profile.baseLocation, row.location) }))
+        .filter(item => item.distance <= Number(profile.serviceRadiusKm || 0))
+        .sort((a, b) => a.distance - b.distance).slice(0, 50)
+        .map(({ row, distance }) => ({
+          id: String(row._id), title: row.title, type: row.location.type,
+          city: row.location.city, province: row.location.province,
+          latitude: row.location.latitude, longitude: row.location.longitude,
+          distanceKm: Math.round(distance * 10) / 10,
+        }));
+    }
     return {
       inspectorProfile: profile ? {
         status: profile.status, specialties: profile.specialties, serviceRadiusKm: profile.serviceRadiusKm,
         baseLocation: profile.baseLocation, biography: profile.biography, reviewNote: profile.reviewNote,
       } : null,
+      nearbyLocations,
       locations: locations.map(row => ({
         id: String(row._id), title: row.title, type: row.location?.type,
         city: row.location?.city, province: row.location?.province,
@@ -380,15 +397,18 @@ export class InspectionsService implements OnModuleInit {
   }
 
   async adminOverview() {
-    const [applications, requests, reports] = await Promise.all([
+    const [applications, requests, reports, sites] = await Promise.all([
       this.profiles.find({ status: 'pending' }).sort({ submittedAt: 1 }).limit(100).toArray(),
       this.requests.find({}).sort({ createdAt: -1 }).limit(100).toArray(),
       this.reports.find({ status: 'pending_review' }).sort({ createdAt: 1 }).limit(100).toArray(),
+      this.locations.find({ section: 'orchards' }, { projection: { title: 1, location: 1, memberId: 1, createdAt: 1 } })
+        .sort({ createdAt: -1 }).limit(500).toArray(),
     ]);
     const memberIds = [...new Map([
       ...applications.map(row => [String(row.memberId), row.memberId] as const),
       ...requests.map(row => [String(row.producerMemberId), row.producerMemberId] as const),
       ...reports.map(row => [String(row.inspectorMemberId), row.inspectorMemberId] as const),
+      ...sites.map(row => [String(row.memberId), row.memberId] as const),
     ]).values()];
     const members = memberIds.length ? await this.members.find({ _id: { $in: memberIds } }, {
       projection: { fullName: 1, phone: 1, organization: 1, city: 1, province: 1 },
@@ -419,6 +439,12 @@ export class InspectionsService implements OnModuleInit {
     }));
     return {
       applications: applicationsView,
+      locations: sites.map(row => ({
+        id: String(row._id), title: row.title, type: row.location?.type,
+        city: row.location?.city, province: row.location?.province,
+        latitude: row.location?.latitude, longitude: row.location?.longitude,
+        producer: memberMap.get(String(row.memberId)), createdAt: row.createdAt,
+      })),
       requests: requests.map(row => ({
         ...this.publicRequest(row), producerMemberId: String(row.producerMemberId),
         producer: memberMap.get(String(row.producerMemberId)),

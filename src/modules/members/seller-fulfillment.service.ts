@@ -33,8 +33,9 @@ export class SellerFulfillmentService {
     ]);
     const visibleIds = new Set(orders.map(order => String(order._id)));
     const meta = await this.db.collection<any>('orderMeta').find({ _id: { $in: [...visibleIds] } }).toArray();
-    const memberIds = [...new Set(orders.map(order => order.memberId).filter(Boolean).map(String))
-      .filter(Types.ObjectId.isValid).map(id => new Types.ObjectId(id))];
+    const memberIds = Array.from(new Set(orders.map(order => order.memberId).filter(Boolean).map(String)))
+      .filter((id: string) => Types.ObjectId.isValid(id))
+      .map((id: string) => new Types.ObjectId(id));
     const buyers = memberIds.length ? await this.db.collection<any>('members').find({ _id: { $in: memberIds } },
       { projection: { fullName: 1, organization: 1, city: 1, province: 1 } }).toArray() : [];
     const fulfillmentByOrder = new Map(fulfillments.map(row => [String(row.orderId), row]));

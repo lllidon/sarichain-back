@@ -2,10 +2,8 @@ import {
   BadRequestException, Body, Controller, ForbiddenException, Get, Headers, Header, Param, Patch, Post,
   Req, StreamableFile, UploadedFiles, UseGuards, UseInterceptors,
 } from '@nestjs/common';
-import { InjectConnection } from '@nestjs/mongoose';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { Connection, Types } from 'mongoose';
 import { AccessTokenGuard } from '../auth/access-token.guard';
 import type { AccessRequest } from '../auth/access';
 import { MarketplaceAccounts } from '../members/marketplace-account.service';
@@ -71,7 +69,7 @@ export class InspectionsController {
 @UseGuards(AccessTokenGuard)
 @Controller('organization/inspections')
 export class OrganizationInspectionsController {
-  constructor(private readonly inspections: InspectionsService, @InjectConnection() private readonly connection: Connection) {}
+  constructor(private readonly inspections: InspectionsService) {}
 
   private authorize(request: AccessRequest) {
     if (!['management', 'admin'].includes(request.access?.role || '')) {

@@ -338,10 +338,12 @@ export class InspectionsService implements OnModuleInit {
     if (!['A', 'B', 'C', 'reject'].includes(qualityGrade)) throw new BadRequestException('درجه کیفی معتبر نیست.');
     const request = await this.requests.findOne({ _id: assignment.requestId });
     if (!request) throw new NotFoundException('درخواست نظارت پیدا نشد.');
+    const observations = cleanText(body.observations, 2000);
+    if (!observations) throw new BadRequestException('شرح مشاهدات بازدید الزامی است.');
     const report = {
       requestId: request._id, assignmentId: assignment._id, inspectorMemberId: memberId,
       producerMemberId: request.producerMemberId, qualityScore, qualityGrade,
-      observations: cleanText(body.observations, 2000),
+      observations,
       pesticideAssessment: cleanText(body.pesticideAssessment, 1500),
       fertilizerAssessment: cleanText(body.fertilizerAssessment, 1500),
       recommendations: cleanText(body.recommendations, 2000),

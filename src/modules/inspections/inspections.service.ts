@@ -115,7 +115,8 @@ export class InspectionsService implements OnModuleInit {
     if (!row) return null;
     return {
       id: String(row._id), status: row.status, locationId: String(row.locationId),
-      locationTitle: row.locationTitle, location: row.location, acreage: row.acreage,
+      locationTitle: row.locationTitle, location: row.location, locationDetails: row.locationDetails,
+      producer: row.producerSnapshot, acreage: row.acreage,
       inspectionType: row.inspectionType, cropType: row.cropType, varieties: row.varieties,
       expectedProductionKg: row.expectedProductionKg, previousProductionKg: row.previousProductionKg,
       pesticideNotes: row.pesticideNotes, fertilizerNotes: row.fertilizerNotes, notes: row.notes,
@@ -193,7 +194,8 @@ export class InspectionsService implements OnModuleInit {
       historyProductionKg / 1000 * Number(policy.perThousandKgKarsha)) * typeMultiplier * historyMultiplier * varietyMultiplier * 100000000) / 100000000;
     const now = new Date();
     const document = {
-      producerMemberId: memberId, locationId: location._id, locationTitle: location.title,
+      producerMemberId: memberId, producerSnapshot: await this.snapshot(memberId),
+      locationId: location._id, locationTitle: location.title, locationDetails: location.details || '',
       location: location.location, acreage, inspectionType,
       cropType: cleanText(input.cropType, 100), varieties: cleanText(input.varieties, 300),
       expectedProductionKg, previousProductionKg,
@@ -295,15 +297,26 @@ export class InspectionsService implements OnModuleInit {
       await this.assignNext({ ...request, rejectedInspectorIds: [...(request.rejectedInspectorIds || []), memberId] });
       return { status: 'declined' };
     }
+    const inspectorProfile = await this.profiles.findOne({ memberId, status: 'approved' });
+    if (!inspectorProfile) throw new ConflictException('صلاحیت نظارت شما فعال نیست.');
     const index = Number(availabilityIndex);
     if (!Number.isInteger(index) || index < 0 || index >= request.availability.length) {
       throw new BadRequestException('بازه پیشنهادی بازدید را انتخاب کنید.');
     }
+    const selected = request.availability[index];
+    const sameDay = await this.assignments.find({
+      inspectorMemberId: memberId, status: 'accepted', 'selectedAvailability.date': selected.date,
+    }).toArray();
+    const overlaps = sameDay.some(row => {
+      const slot = row.selectedAvailability;
+      return slot && selected.startTime < slot.endTime && selected.endTime > slot.startTime;
+    });
+    if (overlaps) throw new ConflictException('در این بازه زمانی مأموریت دیگری پذیرفته‌اید؛ زمان دیگری را انتخاب کنید.');
     await this.assignments.updateOne({ _id: assignment._id, status: 'offered' }, {
-      $set: { status: 'accepted', acceptedAt: now, selectedAvailability: request.availability[index] },
+      $set: { status: 'accepted', acceptedAt: now, selectedAvailability: selected },
     });
     await this.requests.updateOne({ _id: request._id }, {
-      $set: { status: 'scheduled', scheduledVisit: request.availability[index], updatedAt: now },
+      $set: { status: 'scheduled', scheduledVisit: selected, updatedAt: now },
     });
     return { status: 'accepted', scheduledVisit: request.availability[index] };
   }
